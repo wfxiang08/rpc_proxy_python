@@ -5,6 +5,7 @@ from StringIO import StringIO
 import os
 import signal
 import time
+import traceback
 
 from colorama import Fore
 import gevent.pool
@@ -12,6 +13,7 @@ import gevent.queue
 import gevent.event
 import gevent.local
 import gevent.lock
+from thrift.Thrift import TApplicationException, TMessageType
 from thrift.transport.TTransport import TTransportException, TBufferedTransport
 
 from rpc_thrift import MESSAGE_TYPE_HEART_BEAT
@@ -51,10 +53,11 @@ class RpcWorker(object):
         self.socket = None
         self.last_request_time = 0
 
-    def handle_request(self, proto_input, queue):
+    def handle_request(self, proto_input, queue, request_meta):
         """
             从 proto_input中读取数据，然后调用processor处理请求，结果暂时缓存在内存中, 最后一口气交给 queue,
             由专门的 greenlet将数据写回到socket上
+            request_meta = (name, type, seqid)
         """
         trans_output = TMemoryBuffer()
         proto_output = TUtf8BinaryProtocol(trans_output)
@@ -68,10 +71,18 @@ class RpcWorker(object):
             queue.put(msg)
 
         except Exception as e:
-            # 如何出现了异常该如何处理呢
-            # 程序不能挂
-            print_exception()
-            # 如何返回呢?
+
+            # TODO: 在序列化的时候也会出错，如何catch呢?
+            trans_output = TMemoryBuffer()
+            proto_output = TUtf8BinaryProtocol(trans_output)
+            msg = '%s, Exception: %s, Trace: %s' % (request_meta[0], e, traceback.format_exc())
+            x = TApplicationException(TApplicationException.INVALID_PROTOCOL, msg)
+            proto_output.writeMessageBegin(request_meta[0], TMessageType.EXCEPTION, request_meta[2])
+            x.write(proto_output)
+            proto_output.writeMessageEnd()
+            proto_output.trans.flush()
+
+            queue.put(trans_output.getvalue())
 
 
     def loop_all(self):
@@ -163,7 +174,7 @@ class RpcWorker(object):
 
                 else:
                     self.last_request_time = time.time()
-                    self.task_pool.spawn(self.handle_request, proto_input, queue)
+                    self.task_pool.spawn(self.handle_request, proto_input, queue, (name, type, seqid))
             except TTransportException as e:
                 # EOF是很正常的现象
                 if e.type != TTransportException.END_OF_FILE:
