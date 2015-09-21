@@ -30,12 +30,10 @@ class TLoggerMultiplexedProtocol(TProtocolDecorator.TProtocolDecorator):
         self.last_name = None
 
     def writeMessageBegin(self, name, type, seqid):
+        self.last_name = self.serviceName + SEPARATOR + name
 
         self.start = time.time()
-        self.last_name = self.serviceName + SEPARATOR + name
-        self.logger.info("\033[35m[RPC] %s\033[39m[%s] start", self.last_name, seqid) # 为了减少字符串操作，直接将Fore.MAGENTA 硬编码到文件中
-
-        if (type == TMessageType.CALL or type == TMessageType.ONEWAY):
+        if type == TMessageType.CALL or type == TMessageType.ONEWAY:
             self.protocol.writeMessageBegin(self.last_name, type, seqid)
         else:
             self.protocol.writeMessageBegin(name, type, seqid)
