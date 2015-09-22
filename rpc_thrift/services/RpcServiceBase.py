@@ -30,6 +30,19 @@ class Client(Iface):
       self._oprot = oprot
     self._seqid = 0
 
+  def ping1(self):
+    self.send_ping1()
+    self.recv_ping()
+
+  def send_ping1(self):
+    # MESSAGE_TYPE_HEART_BEAT 20
+    # 配合proxy使用
+    self._oprot.writeMessageBegin('ping', 20, self._seqid)
+    args = ping_args()
+    args.write(self._oprot)
+    self._oprot.writeMessageEnd()
+    self._oprot.trans.flush()
+
   def ping(self):
     self.send_ping()
     self.recv_ping()
