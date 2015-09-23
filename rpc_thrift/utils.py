@@ -2,16 +2,26 @@
 from __future__ import absolute_import
 
 from rpc_thrift.protocol import TUtf8BinaryProtocol, TUtf8BinaryProtocolVerbose
-from rpc_thrift.transport import TAutoConnectFramedTransport, TSocket
+from rpc_thrift.transport import TAutoConnectFramedTransport, TRBuffSocket
 
 
 
 
 # Client目前只考虑单线程的情况, 如果是多线程，或者coroutine可能需要使用pool
-_base_protocol = None
+_transport = None
+
 def get_base_protocol(endpoint, timeout=5000):
-    global _base_protocol
-    if not _base_protocol:
+    """
+    临时兼容旧的代码
+    :param endpoint:
+    :param timeout:
+    :return:
+    """
+    return get_transport(endpoint, timeout)
+
+def get_transport(endpoint, timeout=5000):
+    global _transport
+    if not _transport:
         if endpoint.find(":") != -1:
             hostport = endpoint.split(":")
             host = hostport[0]
@@ -22,13 +32,13 @@ def get_base_protocol(endpoint, timeout=5000):
             port = None
             unix_socket = endpoint
 
-        socket = TSocket(host=host, port=port, unix_socket=unix_socket)
+        socket = TRBuffSocket(host=host, port=port, unix_socket=unix_socket)
         socket.setTimeout(timeout)
-        _base_protocol = TAutoConnectFramedTransport(socket)
-    return _base_protocol
+        _transport = TAutoConnectFramedTransport(socket)
+    return _transport
 
 
-def get_base_protocol_4_pool(endpoint, timeout=5000):
+def get_transport_4_pool(endpoint, timeout=5000):
     if endpoint.find(":") != -1:
         hostport = endpoint.split(":")
         host = hostport[0]
@@ -38,14 +48,14 @@ def get_base_protocol_4_pool(endpoint, timeout=5000):
         host = None
         port = None
         unix_socket = endpoint
-    socket = TSocket(host=host, port=port, unix_socket=unix_socket)
+    socket = TRBuffSocket(host=host, port=port, unix_socket=unix_socket)
     socket.setTimeout(timeout)
     transport = TAutoConnectFramedTransport(socket)
 
     return transport
 
 
-def get_service_protocol(service, base_protocol=None, logger=None):
+def get_service_protocol(service, transport=None, logger=None):
     """
     多个不同的service可以共用一个base_protocol; 如果指定了service, 则在base_protocol的基础上添加一个新的wrap
 
@@ -59,9 +69,9 @@ def get_service_protocol(service, base_protocol=None, logger=None):
     :param base_protocol:
     :return:
     """
-    base_protocol = base_protocol or _base_protocol
+    transport = transport or _transport
 
     if logger:
-        return TUtf8BinaryProtocolVerbose(base_protocol, service, logger)
+        return TUtf8BinaryProtocolVerbose(transport, service, logger)
     else:
-        return TUtf8BinaryProtocol(base_protocol, service)
+        return TUtf8BinaryProtocol(transport, service)

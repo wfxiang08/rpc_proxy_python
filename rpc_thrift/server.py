@@ -23,7 +23,7 @@ from rpc_thrift import MESSAGE_TYPE_HEART_BEAT
 from rpc_thrift.config import print_exception
 from rpc_thrift.heartbeat import new_rpc_exit_message
 from rpc_thrift.protocol import TUtf8BinaryProtocol
-from rpc_thrift.transport import TMemoryBuffer, TSocket
+from rpc_thrift.transport import TMemoryBuffer, TRBuffSocket
 
 
 info_logger = logging.getLogger('info_logger')
@@ -31,7 +31,7 @@ info_logger = logging.getLogger('info_logger')
 class TServerSocketEx(TServerSocket):
   def accept(self):
         client, addr = self.handle.accept()
-        result = TSocket()
+        result = TRBuffSocket()
         result.setHandle(client)
         return result
 
@@ -87,8 +87,6 @@ class RpcServer(object):
         try:
             # 2.1 处理正常的请求
             self.processor.process(proto_input, proto_output)
-
-            trans_output.update_frame_size()
             msg = trans_output.getvalue()
             queue.put(msg)
 
@@ -105,8 +103,6 @@ class RpcServer(object):
             x.write(proto_output)
             proto_output.writeMessageEnd()
             proto_output.trans.flush()
-
-            trans_output.update_frame_size()
 
             queue.put(trans_output.getvalue())
 

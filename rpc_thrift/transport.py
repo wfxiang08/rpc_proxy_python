@@ -12,11 +12,10 @@ from thrift.transport.TTransport import TTransportBase, TTransportException, CRe
 from rpc_thrift.socket_buffer import SocketBuffer
 
 
-class TSocket(TSocketBase):
+class TRBuffSocket(TSocketBase):
     """
         1. 支持 inet, unix domain socket通信的socket
         2. 带有read buffer的socket, 算法来自redis-py
-        3.
     """
     def __init__(self, host='localhost', port=9090, unix_socket=None, socket_family=socket.AF_UNSPEC):
         """Initialize a TSocket
@@ -165,69 +164,6 @@ class TSocket(TSocketBase):
         pass
 
 
-class TFramedTransportEx(TTransportBase):
-    """
-        和 TFramedTransport的区别:
-            多了一个 readFrameEx 函数, 由于 TFramedTransport 中的变量 __wbuf, __rbuf不能直接访问，因此就重写了该类
-    """
-
-    def __init__(self, trans, ):
-        self.trans = trans
-        self.wbuf = StringIO()
-        self.rbuf = StringIO()
-
-    def readFrameEx(self):
-        """
-            直接以bytes的形式返回一个Frame
-        """
-        buff = self.trans.readAll(4)
-        sz, = unpack('!i', buff)
-
-        bytes = self.trans.readAll(sz)
-        return bytes
-
-
-    def isOpen(self):
-        return self.trans.isOpen()
-
-    def open(self):
-        return self.trans.open()
-
-    def close(self):
-        return self.trans.close()
-
-
-    def read(self, sz):
-        ret = self.rbuf.read(sz)
-        if len(ret) != 0:
-            return ret
-
-        self.readFrame()
-        return self.rbuf.read(sz)
-
-
-    def readFrame(self):
-        buff = self.trans.readAll(4)
-        sz, = unpack('!i', buff)
-        self.rbuf = StringIO(self.trans.readAll(sz))
-
-
-    def write(self, buf):
-        self.wbuf.write(buf)
-
-    def flush(self):
-        wout = self.wbuf.getvalue()
-        wsz = len(wout)
-        self.wbuf = StringIO()
-
-        # print "TFramedTransport#Flush Frame Size: ", wsz
-
-        # 首先写入长度，并且Flush之前的数据
-        self.trans.write(pack("!i", wsz) + wout)
-        # self.trans.write(wout)
-        self.trans.flush()
-
-READ_BUFFER = 1024 * 4
 PLACE_HOLDER_4_bytes = "1234"
 class TAutoConnectFramedTransport(TTransportBase): # CReadableTransport
     """
@@ -235,7 +171,8 @@ class TAutoConnectFramedTransport(TTransportBase): # CReadableTransport
     """
 
     def __init__(self, socket):
-        self.socket = socket        # TSocket
+        assert isinstance(socket, TRBuffSocket)
+        self.socket = socket
 
         # StringIO的两种状态:
         #   cStringIO.InputType
@@ -289,7 +226,7 @@ class TAutoConnectFramedTransport(TTransportBase): # CReadableTransport
     def __readFrame(self):
         buff = self.socket.readAll(4)
         sz, = unpack('!i', buff)
-        # socket预先读取这么多的字节
+        # socket预先读取这么多的字节, 至少"read_complete"不会出现读取完毕的情况"
         self.socket.peek(sz)
 
 
@@ -301,26 +238,31 @@ class TAutoConnectFramedTransport(TTransportBase): # CReadableTransport
         self.wbuf.write(buf)
 
     def flush(self):
-        # 2. 将wbuf的头四个字节修改为frame的长度
-        wsz = self.wbuf.tell()
-        self.wbuf.seek(0, 0)
-        size = wsz - 4
-        self.wbuf.write(pack("!i", size))
-        self.wbuf.seek(wsz, 0)
-
-        wout = self.wbuf.getvalue(True)
+        wout = get_framed_value(self.wbuf)
 
         try:
             # 首先写入长度，并且Flush之前的数据
             self.socket.write(wout)
             self.socket.flush()
-
-            self.reset_wbuf()
         except Exception:
-            self.reset_wbuf()
             self.close()
             raise
 
+def get_framed_value(wbuf):
+    """
+        从cStringIO.StringO中读取出带有长度的一帧数据
+    """
+    # 将wbuf的头四个字节修改为frame的长度
+    wsz = wbuf.tell()
+    wbuf.seek(0, 0)
+    size = wsz - 4
+    wbuf.write(pack("!i", size))
+    wbuf.seek(wsz, 0)
+
+    wout = wbuf.getvalue(True)
+
+    wbuf.seek(4, 0) # 再次预留4个字节的空间
+    return wout
 
     # @property
     # def cstringio_buf(self):
@@ -364,12 +306,6 @@ class TMemoryBuffer(TTransportBase):
             self._buffer.write(FRAME_SIZE_PLACE_HOLDER)
         else:
             self._buffer.seek(4, 0)
-    def update_frame_size(self):
-        pos = self._buffer.tell()
-        size = pos - 4
-        self._buffer.seek(0, 0)
-        self._buffer.write(pack("!i", size))
-        self._buffer.seek(pos, 0)
 
     def reset(self):
         self._buffer.reset()
@@ -379,8 +315,7 @@ class TMemoryBuffer(TTransportBase):
         """
         只给可写的StringIO提供支持, 返回的是 string, 也就是只读的
         """
-        return self._buffer.getvalue(True)
-
+        return get_framed_value(self._buffer)
 
 
     def isOpen(self):

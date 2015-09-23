@@ -22,7 +22,7 @@ from rpc_thrift import MESSAGE_TYPE_HEART_BEAT
 from rpc_thrift.config import print_exception
 from rpc_thrift.heartbeat import new_rpc_exit_message
 from rpc_thrift.protocol import TUtf8BinaryProtocol
-from rpc_thrift.transport import TMemoryBuffer, TSocket
+from rpc_thrift.transport import TMemoryBuffer, TRBuffSocket
 
 
 info_logger = logging.getLogger('info_logger')
@@ -80,8 +80,6 @@ class RpcWorker(object):
         try:
             # 2.1 处理正常的请求
             self.processor.process(proto_input, proto_output)
-
-            trans_output.update_frame_size()
             msg = trans_output.getvalue()
             queue.put(msg)
 
@@ -97,10 +95,8 @@ class RpcWorker(object):
             proto_output.writeMessageBegin(name, TMessageType.EXCEPTION, seqId)
             x.write(proto_output)
             proto_output.writeMessageEnd()
+
             proto_output.trans.flush()
-
-            trans_output.update_frame_size()
-
             queue.put(trans_output.getvalue())
 
         finally:
@@ -121,7 +117,7 @@ class RpcWorker(object):
             info_logger.info("Prepare open a socket to lb: %s:%s", self.host, self.port)
 
         # 1. 创建一个到lb的连接，然后开始读取Frame, 并且返回数据
-        socket = TSocket(host=self.host, port=self.port, unix_socket=self.unix_socket)
+        socket = TRBuffSocket(host=self.host, port=self.port, unix_socket=self.unix_socket)
 
         try:
             if not socket.isOpen():
