@@ -19,11 +19,11 @@ if sys.version_info < (2, 7):
 
 setup(
     name='rpc_proxy',
-    version="0.1.1",
+    version="0.1.0",
     description='rpc_proxy is a flexible RPC based on thrift.',
     author="wangfei@chunyu.me",
     url='https://git.chunyu.me/infra/rpc_proxy/tree/master/lib',
-    packages=['rpc_thrift', 'rpc_thrift.services'],
+    packages=['rpc_thrift', 'rpc_thrift.services', 'rpc_thrift.log_utils'],
     # install_requires=requirements,
     zip_safe=False,
     license='MIT',

@@ -109,6 +109,7 @@ class ping_args:
   )
 
   def read(self, iprot):
+    # TBinaryProtocolAccelerated 只是一个象征，基本上也没啥事
     if iprot.__class__ == TBinaryProtocol.TBinaryProtocolAccelerated and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None and fastbinary is not None:
       fastbinary.decode_binary(self, iprot.trans, (self.__class__, self.thrift_spec))
       return

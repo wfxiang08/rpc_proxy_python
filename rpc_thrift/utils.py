@@ -1,9 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import absolute_import
 
-from thrift.protocol.TMultiplexedProtocol import TMultiplexedProtocol
-
-from rpc_thrift.protocol import TUtf8BinaryProtocol, TLoggerMultiplexedProtocol
+from rpc_thrift.protocol import TUtf8BinaryProtocol, TUtf8BinaryProtocolVerbose
 from rpc_thrift.transport import TAutoConnectFramedTransport, TSocket
 
 
@@ -26,8 +24,7 @@ def get_base_protocol(endpoint, timeout=5000):
 
         socket = TSocket(host=host, port=port, unix_socket=unix_socket)
         socket.setTimeout(timeout)
-        transport = TAutoConnectFramedTransport(socket)
-        _base_protocol = TUtf8BinaryProtocol(transport)
+        _base_protocol = TAutoConnectFramedTransport(socket)
     return _base_protocol
 
 
@@ -45,7 +42,7 @@ def get_base_protocol_4_pool(endpoint, timeout=5000):
     socket.setTimeout(timeout)
     transport = TAutoConnectFramedTransport(socket)
 
-    return TUtf8BinaryProtocol(transport)
+    return transport
 
 
 def get_service_protocol(service, base_protocol=None, logger=None):
@@ -65,8 +62,8 @@ def get_service_protocol(service, base_protocol=None, logger=None):
     base_protocol = base_protocol or _base_protocol
     if service:
         if logger:
-            return TLoggerMultiplexedProtocol(base_protocol, service, logger)
+            return TUtf8BinaryProtocolVerbose(base_protocol, service, logger)
         else:
-            return TMultiplexedProtocol(base_protocol, service)
+            return TUtf8BinaryProtocol(base_protocol, service)
     else:
         return base_protocol
