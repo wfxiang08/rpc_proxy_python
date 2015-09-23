@@ -27,6 +27,7 @@ from rpc_thrift.transport import TMemoryBuffer, TSocket
 
 info_logger = logging.getLogger('info_logger')
 
+
 class RpcWorker(object):
     def __init__(self, processor, address, pool_size=5, service=None):
         self.processor = processor
@@ -69,9 +70,10 @@ class RpcWorker(object):
         # 1. 获取一个可用的trans_output
         if len(self.out_protocols) > 0:
             trans_output, proto_output = self.out_protocols.popleft()
-            trans_output.reset()
+            trans_output.prepare_4_frame() # 预留4个字节的Frame Size
         else:
             trans_output = TMemoryBuffer()
+            trans_output.prepare_4_frame(True)
             proto_output = TUtf8BinaryProtocol(trans_output) # 无状态的
 
 
@@ -79,12 +81,14 @@ class RpcWorker(object):
             # 2.1 处理正常的请求
             self.processor.process(proto_input, proto_output)
 
+            trans_output.update_frame_size()
             msg = trans_output.getvalue()
             queue.put(msg)
 
         except Exception as e:
             # 2.2 处理异常(主要是结果序列化时参数类型不对的情况)
-            trans_output.reset()
+
+            trans_output.prepare_4_frame()
             name = request_meta[0]
             seqId = request_meta[2]
 
@@ -94,6 +98,8 @@ class RpcWorker(object):
             x.write(proto_output)
             proto_output.writeMessageEnd()
             proto_output.trans.flush()
+
+            trans_output.update_frame_size()
 
             queue.put(trans_output.getvalue())
 
@@ -174,14 +180,19 @@ class RpcWorker(object):
                 # 1. 读取一帧数据
                 buff = socket.readAll(4)
                 sz, = unpack('!i', buff)
-                frame = self.socket.readAll(sz)
+
+                # 将frame size和frame一口气读完, 便于处理"心跳"
+                socket.unread(4)
+                frame = self.socket.readAll(4 + sz)
 
                 from StringIO import StringIO
                 frameIO = StringIO(frame)
                 trans_input = TMemoryBuffer(frameIO)
                 proto_input = TUtf8BinaryProtocol(trans_input)
+
+                frameIO.seek(4)
                 name, type, seqid = proto_input.readMessageBegin()
-                frameIO.seek(0)  # 将proto_input复原
+
 
                 # 如果是心跳，则直接返回
                 if type == MESSAGE_TYPE_HEART_BEAT:
@@ -192,6 +203,7 @@ class RpcWorker(object):
 
                 else:
                     self.last_request_time = time.time()
+                    frameIO.seek(4)  # 将proto_input复原
                     self.task_pool.spawn(self.handle_request, proto_input, queue, (name, type, seqid))
             except TTransportException as e:
                 # EOF是很正常的现象
@@ -206,7 +218,7 @@ class RpcWorker(object):
                 break
 
 
-    def loop_writer(self, trans, queue):
+    def loop_writer(self, socket, queue):
         """
         异步写入数据
         :param trans:
@@ -217,8 +229,8 @@ class RpcWorker(object):
         while msg is not None:
             try:
                 # print "====> ", msg
-                trans.write(msg)
-                trans.flush()
+                socket.write(msg)
+                socket.flush()
             except:
                 print_exception(info_logger)
                 break

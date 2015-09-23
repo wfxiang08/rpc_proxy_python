@@ -145,6 +145,9 @@ class TSocket(TSocketBase):
         """
         return self.read(sz)
 
+    def unread(self, sz):
+        self.socket_buf.unread(sz)
+
     def write(self, buff):
         if not self.socket:
             raise TTransportException(type=TTransportException.NOT_OPEN,
@@ -341,7 +344,7 @@ class TAutoConnectFramedTransport(TTransportBase): # CReadableTransport
     #     # self.rbuf = StringIO(retstring)
     #     return self.rbuf
 
-
+FRAME_SIZE_PLACE_HOLDER = "1234"
 class TMemoryBuffer(TTransportBase):
     def __init__(self, value=None):
         if value is not None:
@@ -355,6 +358,18 @@ class TMemoryBuffer(TTransportBase):
 
     def read(self, sz):
         return self._buffer.read(sz)
+
+    def prepare_4_frame(self, placeholder = False):
+        if placeholder:
+            self._buffer.write(FRAME_SIZE_PLACE_HOLDER)
+        else:
+            self._buffer.seek(4, 0)
+    def update_frame_size(self):
+        pos = self._buffer.tell()
+        size = pos - 4
+        self._buffer.seek(0, 0)
+        self._buffer.write(pack("!i", size))
+        self._buffer.seek(pos, 0)
 
     def reset(self):
         self._buffer.reset()

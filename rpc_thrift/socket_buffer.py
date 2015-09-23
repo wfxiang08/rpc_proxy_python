@@ -70,6 +70,12 @@ class SocketBuffer(object):
         if length > self.length:
             self._read_from_socket(length - self.length)
 
+    def unread(self, size):
+        if self.bytes_read >= size:
+            self.bytes_read = self.bytes_read - size
+        else:
+            raise socket.error("Unexpceted bytes_read status")
+
     def read(self, length):
         # 如果buffer中的数据不够，则从socket读取
         if length > self.length:
