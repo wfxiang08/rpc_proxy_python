@@ -348,9 +348,25 @@ class TMemoryBuffer(TTransportBase):
             if hasattr(value, "close") and hasattr(value, "read"):  # isinstance(value, StringIO):
                 self._buffer = value
             else:
+                # 这个是只读的
                 self._buffer = StringIO(value)
         else:
             self._buffer = StringIO()
+
+    def read(self, sz):
+        return self._buffer.read(sz)
+
+    def reset(self):
+        self._buffer.reset()
+    def write(self, buf):
+        self._buffer.write(buf)
+    def getvalue(self):
+        """
+        只给可写的StringIO提供支持, 返回的是 string, 也就是只读的
+        """
+        return self._buffer.getvalue(True)
+
+
 
     def isOpen(self):
         return not self._buffer.closed
@@ -361,14 +377,7 @@ class TMemoryBuffer(TTransportBase):
     def close(self):
         self._buffer.close()
 
-    def read(self, sz):
-        return self._buffer.read(sz)
-
-    def write(self, buf):
-        self._buffer.write(buf)
-
     def flush(self):
         pass
 
-    def getvalue(self):
-        return self._buffer.getvalue()
+

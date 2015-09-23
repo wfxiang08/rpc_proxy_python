@@ -12,8 +12,6 @@ from thrift.Thrift import TMessageType
 
 SEPARATOR = ":"
 class TUtf8BinaryProtocol(TBinaryProtocol):
-
-
     def __init__(self, trans, service_name=None):
         TBinaryProtocol.__init__(self, trans, False, True)
         if service_name:

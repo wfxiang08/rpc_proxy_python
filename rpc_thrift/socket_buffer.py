@@ -9,7 +9,7 @@ class SocketBuffer(object):
     """
         拷贝自redis-py(目标减少系统调用)
     """
-    def __init__(self, socket = None, socket_read_size=1024 * 4):
+    def __init__(self, socket = None, socket_read_size=1024 * 64):
         self._sock = socket
         self.socket_read_size = socket_read_size
 
