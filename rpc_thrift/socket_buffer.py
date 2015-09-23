@@ -55,7 +55,11 @@ class SocketBuffer(object):
 
                 if (length is not None) and length > marker:
                     continue
+
+                # 还原buf的pos
+                buf.seek(self.bytes_read)
                 break
+
         except socket.timeout:
             raise
         except socket.error:
@@ -73,6 +77,7 @@ class SocketBuffer(object):
     def unread(self, size):
         if self.bytes_read >= size:
             self.bytes_read = self.bytes_read - size
+            self._buffer.seek(self.bytes_read)
         else:
             raise socket.error("Unexpceted bytes_read status")
 
@@ -82,7 +87,7 @@ class SocketBuffer(object):
             self._read_from_socket(length - self.length)
 
         # 从_buffer中读取数据
-        self._buffer.seek(self.bytes_read)
+
         data = self._buffer.read(length)
 
         self.bytes_read += len(data)
