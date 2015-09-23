@@ -19,7 +19,7 @@ if sys.version_info < (2, 7):
 
 setup(
     name='rpc_proxy',
-    version="0.1.0",
+    version="1.0.0",
     description='rpc_proxy is a flexible RPC based on thrift.',
     author="wangfei@chunyu.me",
     url='https://git.chunyu.me/infra/rpc_proxy/tree/master/lib',
