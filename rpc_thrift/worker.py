@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import absolute_import
 
-from StringIO import StringIO
+from cStringIO import StringIO
 import os
 import signal
 import time

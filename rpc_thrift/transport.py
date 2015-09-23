@@ -5,15 +5,19 @@ import socket
 from struct import pack, unpack
 import errno
 import sys
-from StringIO import StringIO
+from cStringIO import StringIO
 from thrift.transport.TSocket import TSocketBase
 
-from thrift.transport.TTransport import TTransportBase, TTransportException
+from thrift.transport.TTransport import TTransportBase, TTransportException, CReadableTransport
+from rpc_thrift.socket_buffer import SocketBuffer
 
 
 class TSocket(TSocketBase):
-    """Socket implementation of TTransport base."""
-
+    """
+        1. 支持 inet, unix domain socket通信的socket
+        2. 带有read buffer的socket, 算法来自redis-py
+        3.
+    """
     def __init__(self, host='localhost', port=9090, unix_socket=None, socket_family=socket.AF_UNSPEC):
         """Initialize a TSocket
 
@@ -25,16 +29,35 @@ class TSocket(TSocketBase):
         """
         self.host = host
         self.port = port
-        self.handle = None
+
         self._unix_socket = unix_socket
-        self._timeout = None
         self._socket_family = socket_family
 
+        self._timeout = None
+
+        self.socket = None
+        self.socket_buf = SocketBuffer()
+        self.handle = None
+
     def setHandle(self, h):
-        self.handle = h
+        self.setSocket(h)
+
+    def setSocket(self, s):
+        """
+            更新Socket, 以及对应的SocketBuffer
+        """
+        self.socket = s
+        self.socket_buf.update_socket(self.socket)
 
     def isOpen(self):
-        return self.handle is not None
+        return self.socket is not None
+
+    def close(self):
+        if self.socket:
+            self.socket.close()
+            self.socket = None
+            self.socket_buf.update_socket(self.socket)
+
 
     def setTimeout(self, ms):
         if ms is None:
@@ -42,21 +65,23 @@ class TSocket(TSocketBase):
         else:
             self._timeout = ms / 1000.0
 
-        if self.handle is not None:
-            self.handle.settimeout(self._timeout)
+        if self.socket is not None:
+            self.socket.settimeout(self._timeout)
 
     def open(self):
         try:
             res0 = self._resolveAddr()
             for res in res0:
-                self.handle = socket.socket(res[0], res[1])
-                self.handle.settimeout(self._timeout)
+                self.socket = socket.socket(res[0], res[1])
+                self.socket.settimeout(self._timeout)
+                self.socket_buf.update_socket(self.socket)
+
                 # 拷贝自redis-py
                 if res[0] == socket.AF_INET:
-                    self.handle.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+                    self.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
 
                 try:
-                    self.handle.connect(res[4])
+                    self.socket.connect(res[4])
                 except socket.error, e:
                     if res is not res0[-1]:
                         continue
@@ -71,40 +96,67 @@ class TSocket(TSocketBase):
                 message = 'Could not connect to %s:%d' % (self.host, self.port)
             raise TTransportException(type=TTransportException.NOT_OPEN, message=message)
 
+    def read_complete(self):
+        return self.socket_buf.read_complete()
+
+    def peek(self, sz):
+        """
+        确保socket中存在 sz个字节
+        :param sz:
+        :return:
+        """
+        try:
+            self.socket_buf.read_from_socket(sz)
+        except socket.error, e:
+            if (e.args[0] == errno.ECONNRESET and (sys.platform == 'darwin' or sys.platform.startswith('freebsd'))):
+                # freebsd and Mach don't follow POSIX semantic of recv and fail with ECONNRESET if peer performed shutdown.
+                # See corresponding comment and code in TSocket::read() in lib/cpp/src/transport/TSocket.cpp.
+                self.close()
+                raise TTransportException(type=TTransportException.END_OF_FILE, message='TSocket read 0 bytes')
+            else:
+                raise
+
     def read(self, sz):
         try:
             # 正常情况下会block在这个地方，直到读取所需要sz的数据
-            buff = self.handle.recv(sz)
+            buff = self.socket_buf.read(sz)
         except socket.error, e:
-            if (e.args[0] == errno.ECONNRESET and
-                    (sys.platform == 'darwin' or sys.platform.startswith('freebsd'))):
-                # freebsd and Mach don't follow POSIX semantic of recv
-                # and fail with ECONNRESET if peer performed shutdown.
-                # See corresponding comment and code in TSocket::read()
-                # in lib/cpp/src/transport/TSocket.cpp.
+            if (e.args[0] == errno.ECONNRESET and (sys.platform == 'darwin' or sys.platform.startswith('freebsd'))):
+                # freebsd and Mach don't follow POSIX semantic of recv and fail with ECONNRESET if peer performed shutdown.
+                # See corresponding comment and code in TSocket::read() in lib/cpp/src/transport/TSocket.cpp.
+                #
                 self.close()
                 # Trigger the check to raise the END_OF_FILE exception below.
                 buff = ''
             else:
                 raise
+
         if len(buff) == 0:
             raise TTransportException(type=TTransportException.END_OF_FILE,
                                       message='TSocket read 0 bytes')
-        return buff
+        else:
+            return buff
+
+    def readAll(self, sz):
+        """
+        由于存在buffer, 因此应该能够一口气读取完毕
+        :param sz:
+        :return:
+        """
+        return self.read(sz)
 
     def write(self, buff):
-        if not self.handle:
+        if not self.socket:
             raise TTransportException(type=TTransportException.NOT_OPEN,
                                       message='Transport not open')
-        sent = 0
-        have = len(buff)
-        while sent < have:
-            plus = self.handle.send(buff)
-            if plus == 0:
-                raise TTransportException(type=TTransportException.END_OF_FILE,
-                                          message='TSocket sent 0 bytes')
-            sent += plus
-            buff = buff[plus:]
+        try:
+            self.socket.sendall(buff)
+        except socket.timeout:
+            raise TTransportException(type=TTransportException.TIMED_OUT,
+                                      message='Socket Timeout')
+        except socket.error:
+            raise TTransportException(type=TTransportException.UNKNOWN,
+                                      message='Socket Send Error')
 
     def flush(self):
         pass
@@ -172,17 +224,16 @@ class TFramedTransportEx(TTransportBase):
         # self.trans.write(wout)
         self.trans.flush()
 
-
-class TAutoConnectFramedTransport(TTransportBase):
+READ_BUFFER = 1024 * 4
+PLACE_HOLDER_4_bytes = "1234"
+class TAutoConnectFramedTransport(TTransportBase): # CReadableTransport
     """
         将socket进行包装，提供了自动重连的功能, 重连之后清空之前的状态
     """
 
     def __init__(self, socket):
-        self.socket = socket
-
+        self.socket = socket        # TSocket
         self.wbuf = StringIO()
-        self.rbuf = StringIO()
 
     def isOpen(self):
         return self.socket.isOpen()
@@ -194,65 +245,97 @@ class TAutoConnectFramedTransport(TTransportBase):
         self.socket.open()
 
         # 恢复状态
-        self.reset_buff()
+        self.wbuf.reset()
+        self.wbuf.write(self.wbuf.write(PLACE_HOLDER_4_bytes))
 
     def close(self):
         self.socket.close()
 
-    def reset_buff(self):
-        if self.wbuf.len != 0:
-            self.wbuf = StringIO()
-        if self.rbuf.len != 0:
-            self.rbuf = StringIO()
-
     def read(self, sz):
-        if not self.isOpen():
-            self.open()
+        # 1. 先预先读取一帧数据
+        if self.socket.read_complete():
+            # 1. 确保Socket打开
+            if not self.isOpen():
+                self.open()
 
-        ret = self.rbuf.read(sz)
-        if len(ret) != 0:
-            return ret
+            # 2. 读取一帧数据
+            try:
+                self.__readFrame()
+            except Exception:  # TTransportException, timeout, Broken Pipe
+                self.close()
+                raise
+        # 2. 在buffer上读取数据
+        return self.socket.readAll(sz)
 
-        try:
-            self.__readFrame()
-            return self.rbuf.read(sz)
-        except Exception:  # TTransportException, timeout, Broken Pipe
-            self.close()
-            raise
+    def readAll(self, sz):
+        # 由于buffer的存在, readAll功能退化
+        return self.read(sz)
+
 
     def __readFrame(self):
         buff = self.socket.readAll(4)
         sz, = unpack('!i', buff)
-        self.rbuf = StringIO(self.socket.readAll(sz))
+
+        # socket预先读取这么多的字节
+        self.socket.peek(sz)
 
 
     def write(self, buf):
-        if not self.isOpen():
-            self.open()
         self.wbuf.write(buf)
 
     def flush(self):
+        # 1. 在flush时才确保连接打开
         if not self.isOpen():
             self.open()
 
-        wout = self.wbuf.getvalue()
-        wsz = len(wout)
-        self.wbuf = StringIO()  # 状态恢复了
+        # 2. 将wbuf的头四个字节修改为frame的长度
+        wsz = self.wbuf.tell()
+        self.wbuf.seek(0, 0)
+        self.wbuf.write(pack("!i", wsz - 4))
+        self.wbuf.seek(wsz, 0)
 
-        # print "TFramedTransport#Flush Frame Size: ", wsz
+        wout = self.wbuf.getvalue()
+
         try:
             # 首先写入长度，并且Flush之前的数据
-            self.socket.write(pack("!i", wsz) + wout)
+            self.socket.write(wout)
             self.socket.flush()
+
+            # 正常情况下 reset wbuf
+            self.wbuf.reset()
+            self.wbuf.write(PLACE_HOLDER_4_bytes)
         except Exception:
             self.close()
             raise
 
 
+    # @property
+    # def cstringio_buf(self):
+    #     return self.rbuf
+    #
+    #
+    # def cstringio_refill(self, partialread, reqlen):
+    #     """
+    #         一次读一个Frame
+    #     """
+    #     self.__readFrame() # 不应该有partialread
+    #     # retstring = partialread
+    #     # if reqlen < self.__rbuf_size:
+    #     #     # try to make a read of as much as we can.
+    #     #     retstring += self.__trans.read(self.__rbuf_size)
+    #     #
+    #     # # but make sure we do read reqlen bytes.
+    #     # if len(retstring) < reqlen:
+    #     #     retstring += self.__trans.readAll(reqlen - len(retstring))
+    #     #
+    #     # self.rbuf = StringIO(retstring)
+    #     return self.rbuf
+
+
 class TMemoryBuffer(TTransportBase):
     def __init__(self, value=None):
         if value is not None:
-            if isinstance(value, StringIO):
+            if hasattr(value, "close") and hasattr(value, "read"):  # isinstance(value, StringIO):
                 self._buffer = value
             else:
                 self._buffer = StringIO(value)
