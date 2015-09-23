@@ -40,8 +40,6 @@ class CustomWatchedFileHandler(logging.FileHandler):
 
             self.dev, self.ino = stat[ST_DEV], stat[ST_INO]
 
-        # 交给系统默认的实现
-        print "Record: ..."
         logging.FileHandler.emit(self, record)
 
 
