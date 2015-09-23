@@ -73,7 +73,7 @@ class TUtf8BinaryProtocolVerbose(TBinaryProtocol):
     def readMessageBegin(self):
         elapsed = (time.time() - self.start) * 1000
 
-        name, type, seqid = self.protocol.readMessageBegin()
+        name, type, seqid = TBinaryProtocol.readMessageBegin(self)
         self.logger.info("\033[35m[RPC] %s\033[39m[%s] ends, Elapsed: %.3fms", self.last_name, seqid, elapsed)
         return name, type, seqid
 
