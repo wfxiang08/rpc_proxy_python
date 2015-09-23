@@ -60,10 +60,8 @@ def get_service_protocol(service, base_protocol=None, logger=None):
     :return:
     """
     base_protocol = base_protocol or _base_protocol
-    if service:
-        if logger:
-            return TUtf8BinaryProtocolVerbose(base_protocol, service, logger)
-        else:
-            return TUtf8BinaryProtocol(base_protocol, service)
+
+    if logger:
+        return TUtf8BinaryProtocolVerbose(base_protocol, service, logger)
     else:
-        return base_protocol
+        return TUtf8BinaryProtocol(base_protocol, service)
