@@ -106,7 +106,7 @@ class TSocket(TSocketBase):
         :return:
         """
         try:
-            self.socket_buf.read_from_socket(sz)
+            self.socket_buf.peek(sz)
         except socket.error, e:
             if (e.args[0] == errno.ECONNRESET and (sys.platform == 'darwin' or sys.platform.startswith('freebsd'))):
                 # freebsd and Mach don't follow POSIX semantic of recv and fail with ECONNRESET if peer performed shutdown.
@@ -233,7 +233,12 @@ class TAutoConnectFramedTransport(TTransportBase): # CReadableTransport
 
     def __init__(self, socket):
         self.socket = socket        # TSocket
+
+        # StringIO的两种状态:
+        #   cStringIO.InputType
+        #   cStringIO.OutputType
         self.wbuf = StringIO()
+
 
     def isOpen(self):
         return self.socket.isOpen()
@@ -243,10 +248,12 @@ class TAutoConnectFramedTransport(TTransportBase): # CReadableTransport
             open之后需要重置状态
         """
         self.socket.open()
+        self.reset_wbuf()
 
+    def reset_wbuf(self):
         # 恢复状态
         self.wbuf.reset()
-        self.wbuf.write(self.wbuf.write(PLACE_HOLDER_4_bytes))
+        self.wbuf.write(PLACE_HOLDER_4_bytes)
 
     def close(self):
         self.socket.close()
@@ -254,18 +261,22 @@ class TAutoConnectFramedTransport(TTransportBase): # CReadableTransport
     def read(self, sz):
         # 1. 先预先读取一帧数据
         if self.socket.read_complete():
-            # 1. 确保Socket打开
-            if not self.isOpen():
-                self.open()
-
             # 2. 读取一帧数据
             try:
                 self.__readFrame()
             except Exception:  # TTransportException, timeout, Broken Pipe
                 self.close()
                 raise
+
         # 2. 在buffer上读取数据
-        return self.socket.readAll(sz)
+        if sz > 0:
+            try:
+                return self.socket.readAll(sz)
+            except Exception:
+                self.close()
+                raise
+        else:
+            return ""
 
     def readAll(self, sz):
         # 由于buffer的存在, readAll功能退化
@@ -275,36 +286,35 @@ class TAutoConnectFramedTransport(TTransportBase): # CReadableTransport
     def __readFrame(self):
         buff = self.socket.readAll(4)
         sz, = unpack('!i', buff)
-
         # socket预先读取这么多的字节
         self.socket.peek(sz)
 
 
     def write(self, buf):
-        self.wbuf.write(buf)
-
-    def flush(self):
         # 1. 在flush时才确保连接打开
         if not self.isOpen():
             self.open()
 
+        self.wbuf.write(buf)
+
+    def flush(self):
         # 2. 将wbuf的头四个字节修改为frame的长度
         wsz = self.wbuf.tell()
         self.wbuf.seek(0, 0)
-        self.wbuf.write(pack("!i", wsz - 4))
+        size = wsz - 4
+        self.wbuf.write(pack("!i", size))
         self.wbuf.seek(wsz, 0)
 
-        wout = self.wbuf.getvalue()
+        wout = self.wbuf.getvalue(True)
 
         try:
             # 首先写入长度，并且Flush之前的数据
             self.socket.write(wout)
             self.socket.flush()
 
-            # 正常情况下 reset wbuf
-            self.wbuf.reset()
-            self.wbuf.write(PLACE_HOLDER_4_bytes)
+            self.reset_wbuf()
         except Exception:
+            self.reset_wbuf()
             self.close()
             raise
 

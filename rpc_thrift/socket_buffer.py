@@ -28,12 +28,14 @@ class SocketBuffer(object):
     def length(self):
         return self.bytes_written - self.bytes_read
 
-    def read_from_socket(self, length=None):
+    def _read_from_socket(self, length=None):
         """
-        确保buffer中的数据足够多
-        :param length:
-        :return:
+            从socket中新读取一个数据包(recv能读取多少就读取多少)，或者读取指定长度的数据
+            注意两个状态变量:
+                self.bytes_written
+                self.bytes_read
         """
+
         socket_read_size = self.socket_read_size
         buf = self._buffer
         buf.seek(self.bytes_written)
@@ -51,7 +53,7 @@ class SocketBuffer(object):
                 self.bytes_written += data_length
                 marker += data_length
 
-                if length is not None and length > marker:
+                if (length is not None) and length > marker:
                     continue
                 break
         except socket.timeout:
@@ -61,10 +63,17 @@ class SocketBuffer(object):
             # e = sys.exc_info()[1]
             # raise Exception("Error while reading from socket: %s" % (e.args,))
 
+    def peek(self, length):
+        """
+            确保buffer中的数据足够多
+        """
+        if length > self.length:
+            self._read_from_socket(length - self.length)
+
     def read(self, length):
         # 如果buffer中的数据不够，则从socket读取
         if length > self.length:
-            self.read_from_socket(length - self.length)
+            self._read_from_socket(length - self.length)
 
         # 从_buffer中读取数据
         self._buffer.seek(self.bytes_read)
