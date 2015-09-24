@@ -98,25 +98,6 @@ class TRBuffSocket(TSocketBase):
                 message = 'Could not connect to %s:%d' % (self.host, self.port)
             raise TTransportException(type=TTransportException.NOT_OPEN, message=message)
 
-    def read_complete(self):
-        return self.socket_buf.read_complete()
-
-    def peek(self, sz):
-        """
-        确保socket中存在 sz个字节
-        :param sz:
-        :return:
-        """
-        try:
-            self.socket_buf.peek(sz)
-        except socket.error, e:
-            if (e.args[0] == errno.ECONNRESET and (sys.platform == 'darwin' or sys.platform.startswith('freebsd'))):
-                # freebsd and Mach don't follow POSIX semantic of recv and fail with ECONNRESET if peer performed shutdown.
-                # See corresponding comment and code in TSocket::read() in lib/cpp/src/transport/TSocket.cpp.
-                self.close()
-                raise TTransportException(type=TTransportException.END_OF_FILE, message='TSocket read 0 bytes')
-            else:
-                raise
 
     def read(self, sz):
         try:
@@ -168,7 +149,8 @@ class TRBuffSocket(TSocketBase):
 
 
 PLACE_HOLDER_4_bytes = "1234"
-class TAutoConnectFramedTransport(TTransportBase): # CReadableTransport
+
+class TAutoConnectFramedTransport(TTransportBase, CReadableTransport):
     """
         将socket进行包装，提供了自动重连的功能, 重连之后清空之前的状态
     """
@@ -177,11 +159,29 @@ class TAutoConnectFramedTransport(TTransportBase): # CReadableTransport
         assert isinstance(socket, TRBuffSocket)
         self.socket = socket
 
-        # StringIO的两种状态:
-        #   cStringIO.InputType
-        #   cStringIO.OutputType
         self.wbuf = StringIO()
         self.reset_wbuf()
+
+    @property
+    def cstringio_buf(self):
+        # thrift的fastbinary.c代码经过
+        # https://github.com/wfxiang08/thrift/commit/198862d6d164f28c7862a71a88758d3c566465b3
+        return self.socket.socket_buf._buffer
+
+    def cstringio_refill(self, partialread, reqlen):
+        """
+        cStringIO中的数据不够
+        :param partialread:
+        :param reqlen:
+        :return:
+        """
+        l = len(partialread)
+        if l == 0:
+            self.socket.socket_buf.purge()
+
+        # 重复使用同样 _buffer
+        self.socket.socket_buf.peek(reqlen - l)
+        return self.socket.socket_buf._buffer
 
 
     def isOpen(self):
@@ -204,16 +204,7 @@ class TAutoConnectFramedTransport(TTransportBase): # CReadableTransport
         self.reset_wbuf()
 
     def read(self, sz):
-        # 1. 先预先读取一帧数据
-        if self.socket.read_complete():
-            # 2. 读取一帧数据
-            try:
-                self.__readFrame()
-            except Exception:  # TTransportException, timeout, Broken Pipe
-                self.close()
-                raise
-
-        # 2. 在buffer上读取数据
+        # Frame相关的信息在Protocol中处理掉了
         if sz > 0:
             try:
                 return self.socket.readAll(sz)
@@ -226,13 +217,6 @@ class TAutoConnectFramedTransport(TTransportBase): # CReadableTransport
     def readAll(self, sz):
         # 由于buffer的存在, readAll功能退化
         return self.read(sz)
-
-
-    def __readFrame(self):
-        buff = self.socket.readAll(4)
-        sz, = unpack('!i', buff)
-        # socket预先读取这么多的字节, 至少"read_complete"不会出现读取完毕的情况"
-        self.socket.peek(sz)
 
 
     def write(self, buf):
@@ -269,27 +253,7 @@ def get_framed_value(wbuf):
     wbuf.seek(4, 0) # 再次预留4个字节的空间
     return wout
 
-    # @property
-    # def cstringio_buf(self):
-    #     return self.rbuf
-    #
-    #
-    # def cstringio_refill(self, partialread, reqlen):
-    #     """
-    #         一次读一个Frame
-    #     """
-    #     self.__readFrame() # 不应该有partialread
-    #     # retstring = partialread
-    #     # if reqlen < self.__rbuf_size:
-    #     #     # try to make a read of as much as we can.
-    #     #     retstring += self.__trans.read(self.__rbuf_size)
-    #     #
-    #     # # but make sure we do read reqlen bytes.
-    #     # if len(retstring) < reqlen:
-    #     #     retstring += self.__trans.readAll(reqlen - len(retstring))
-    #     #
-    #     # self.rbuf = StringIO(retstring)
-    #     return self.rbuf
+
 
 FRAME_SIZE_PLACE_HOLDER = "1234"
 class TMemoryBuffer(TTransportBase):

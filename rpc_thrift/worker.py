@@ -29,7 +29,7 @@ info_logger = logging.getLogger('info_logger')
 
 
 class RpcWorker(object):
-    def __init__(self, processor, address, pool_size=5, service=None):
+    def __init__(self, processor, address, pool_size=1, service=None, fastbinary=False):
         self.processor = processor
 
         if address.find(":") != -1:
@@ -42,7 +42,7 @@ class RpcWorker(object):
             self.port = None
             self.unix_socket = address
 
-
+        self.fastbinary = fastbinary
         # 4. gevent
         self.task_pool = gevent.pool.Pool(size=pool_size)
         self.acceptor_task = None
@@ -74,7 +74,7 @@ class RpcWorker(object):
         else:
             trans_output = TMemoryBuffer()
             trans_output.prepare_4_frame(True)
-            proto_output = TUtf8BinaryProtocol(trans_output) # 无状态的
+            proto_output = TUtf8BinaryProtocol(trans_output, fastbinary=self.fastbinary) # 无状态的
 
 
         try:
@@ -181,12 +181,10 @@ class RpcWorker(object):
                 socket.unread(4)
                 frame = self.socket.readAll(4 + sz)
 
-                from StringIO import StringIO
-                frameIO = StringIO(frame)
-                trans_input = TMemoryBuffer(frameIO)
-                proto_input = TUtf8BinaryProtocol(trans_input)
 
-                frameIO.seek(4)
+                trans_input = TMemoryBuffer(frame)
+                proto_input = TUtf8BinaryProtocol(trans_input, fastbinary=self.fastbinary)
+
                 name, type, seqid = proto_input.readMessageBegin()
 
 
@@ -199,7 +197,7 @@ class RpcWorker(object):
 
                 else:
                     self.last_request_time = time.time()
-                    frameIO.seek(4)  # 将proto_input复原
+                    trans_input.reset()
                     self.task_pool.spawn(self.handle_request, proto_input, queue, (name, type, seqid))
             except TTransportException as e:
                 # EOF是很正常的现象
