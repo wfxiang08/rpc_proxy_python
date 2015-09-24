@@ -13,6 +13,8 @@ from rpc_thrift.socket_buffer import SocketBuffer
 
 
 class TRBuffSocket(TSocketBase):
+    __slots__ = ("host", "port", "_unix_socket", "_socket_family", "_timeout", "socket", "socket_buf", "handle")
+
     """
         1. 支持 inet, unix domain socket通信的socket
         2. 带有read buffer的socket, 算法来自redis-py
@@ -37,6 +39,7 @@ class TRBuffSocket(TSocketBase):
         self.socket = None
         self.socket_buf = SocketBuffer()
         self.handle = None
+
 
     def setHandle(self, h):
         self.setSocket(h)
@@ -178,6 +181,7 @@ class TAutoConnectFramedTransport(TTransportBase): # CReadableTransport
         #   cStringIO.InputType
         #   cStringIO.OutputType
         self.wbuf = StringIO()
+        self.reset_wbuf()
 
 
     def isOpen(self):
@@ -188,7 +192,7 @@ class TAutoConnectFramedTransport(TTransportBase): # CReadableTransport
             open之后需要重置状态
         """
         self.socket.open()
-        self.reset_wbuf()
+
 
     def reset_wbuf(self):
         # 恢复状态
@@ -197,6 +201,7 @@ class TAutoConnectFramedTransport(TTransportBase): # CReadableTransport
 
     def close(self):
         self.socket.close()
+        self.reset_wbuf()
 
     def read(self, sz):
         # 1. 先预先读取一帧数据
@@ -231,13 +236,13 @@ class TAutoConnectFramedTransport(TTransportBase): # CReadableTransport
 
 
     def write(self, buf):
+        self.wbuf.write(buf)
+
+    def flush(self):
         # 1. 在flush时才确保连接打开
         if not self.isOpen():
             self.open()
 
-        self.wbuf.write(buf)
-
-    def flush(self):
         wout = get_framed_value(self.wbuf)
 
         try:

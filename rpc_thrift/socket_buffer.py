@@ -3,15 +3,23 @@ from __future__ import absolute_import
 
 import socket
 from cStringIO import StringIO
+import sys
+
+is_new_buffer = sys.version_info > (2, 7, 5)
 
 SERVER_CLOSED_CONNECTION_ERROR = "Connection closed by server."
 class SocketBuffer(object):
+    __slots__ = ("_sock", "socket_read_size", "_buffer", "bytes_written", "bytes_read")
+    # , "byte_array", "byte_array0"
     """
         拷贝自redis-py(目标减少系统调用)
     """
     def __init__(self, socket = None, socket_read_size=1024 * 64):
         self._sock = socket
         self.socket_read_size = socket_read_size
+
+        # self.byte_array0 = bytearray(socket_read_size)
+        # self.byte_array = memoryview(self.byte_array0)
 
         self._buffer = StringIO()
         self.bytes_written = 0      # 从socket写入buffer的 byte数
@@ -44,10 +52,16 @@ class SocketBuffer(object):
         try:
             while True:
                 data = self._sock.recv(socket_read_size)
+                # data_length = self._sock.recv_into(self.byte_array, socket_read_size)
                 # an empty string indicates the server shutdown the socket
                 if isinstance(data, bytes) and len(data) == 0:
+                # if data_length == 0:
                     raise socket.error(SERVER_CLOSED_CONNECTION_ERROR)
 
+                # if is_new_buffer:
+                #     buf.write(self.byte_array[0:data_length])
+                # else:
+                #     buf.write(buffer(self.byte_array0, 0, data_length))
                 buf.write(data)
                 data_length = len(data)
                 self.bytes_written += data_length
