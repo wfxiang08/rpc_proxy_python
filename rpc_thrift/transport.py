@@ -158,11 +158,7 @@ class TAutoConnectFramedTransport(TTransportBase, CReadableTransport):
     def __init__(self, socket):
         assert isinstance(socket, TRBuffSocket)
         self.socket = socket
-        self.fastmode = False
 
-        # StringIO的两种状态:
-        #   cStringIO.InputType
-        #   cStringIO.OutputType
         self.wbuf = StringIO()
         self.reset_wbuf()
 
