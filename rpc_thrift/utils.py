@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import absolute_import
 
-from rpc_thrift.protocol import TUtf8BinaryProtocol, TUtf8BinaryProtocolVerbose
+from rpc_thrift.protocol import TUtf8BinaryProtocol
 from rpc_thrift.transport import TAutoConnectFramedTransport, TRBuffSocket
 
 
@@ -55,7 +55,7 @@ def get_transport_4_pool(endpoint, timeout=5000):
     return transport
 
 
-def get_service_protocol(service, transport=None, logger=None):
+def get_service_protocol(service, transport=None, logger=None, fastbinary=False):
     """
     多个不同的service可以共用一个base_protocol; 如果指定了service, 则在base_protocol的基础上添加一个新的wrap
 
@@ -70,8 +70,4 @@ def get_service_protocol(service, transport=None, logger=None):
     :return:
     """
     transport = transport or _transport
-
-    if logger:
-        return TUtf8BinaryProtocolVerbose(transport, service, logger)
-    else:
-        return TUtf8BinaryProtocol(transport, service)
+    return TUtf8BinaryProtocol(transport, service, fastbinary, logger)
