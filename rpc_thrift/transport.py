@@ -169,6 +169,7 @@ class TAutoConnectFramedTransport(TTransportBase, CReadableTransport):
     @property
     def cstringio_buf(self):
         # thrift的fastbinary.c代码经过
+        # https://github.com/wfxiang08/thrift/commit/198862d6d164f28c7862a71a88758d3c566465b3
         return self.socket.socket_buf._buffer
 
     def cstringio_refill(self, partialread, reqlen):
@@ -181,6 +182,8 @@ class TAutoConnectFramedTransport(TTransportBase, CReadableTransport):
         l = len(partialread)
         if l == 0:
             self.socket.socket_buf.purge()
+
+        # 重复使用同样 _buffer
         self.socket.socket_buf.peek(reqlen - l)
         return self.socket.socket_buf._buffer
 
