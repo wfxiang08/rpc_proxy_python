@@ -36,7 +36,7 @@ class TServerSocketEx(TServerSocket):
         return result
 
 class RpcServer(object):
-    def __init__(self, processor, address, pool_size=5, service=None):
+    def __init__(self, processor, address, pool_size=5, service=None, fastbinary=False):
         self.processor = processor
 
         if address.find(":") != -1:
@@ -49,7 +49,7 @@ class RpcServer(object):
             self.port = None
             self.unix_socket = address
 
-
+        self.fastbinary = fastbinary
         # 4. gevent
         self.task_pool = gevent.pool.Pool(size=pool_size)
         self.acceptor_task = None
@@ -62,10 +62,16 @@ class RpcServer(object):
 
         self.service = service
         self.queue = None
-        self.socket = None
         self.last_request_time = 0
 
         self.out_protocols = collections.deque()
+        self.alive = True
+        self.socket = None
+
+    def close(self):
+        self.alive = False
+        if self.socket:
+            self.socket.close()
 
     def handle_request(self, proto_input, queue, request_meta):
         """
@@ -116,17 +122,16 @@ class RpcServer(object):
         socket.open()
         socket.listen()
 
-        while True:
+        while self.alive:
             tsocket = socket.accept()
-            self.socket = tsocket
             print "Get A Connection: ", tsocket
 
             # 如果出现None, 则表示要结束了
             queue = gevent.queue.Queue()
 
             # 3. 在同一个transport上进行读写数据
-            g1 = gevent.spawn(self.loop_reader, self.socket, queue)
-            g2 = gevent.spawn(self.loop_writer, self.socket, queue)
+            g1 = gevent.spawn(self.loop_reader, tsocket, queue)
+            g2 = gevent.spawn(self.loop_writer, tsocket, queue)
             gevent.joinall([g1, g2])
 
 
@@ -160,14 +165,10 @@ class RpcServer(object):
 
                 # 将frame size和frame一口气读完, 便于处理"心跳"
                 socket.unread(4)
-                frame = self.socket.readAll(4 + sz)
+                frame = socket.readAll(4 + sz)
 
-                from StringIO import StringIO
-                frameIO = StringIO(frame)
-                trans_input = TMemoryBuffer(frameIO)
-                proto_input = TUtf8BinaryProtocol(trans_input)
-
-                frameIO.seek(4)
+                trans_input = TMemoryBuffer(frame)
+                proto_input = TUtf8BinaryProtocol(trans_input, fastbinary=self.fastbinary)
                 name, type, seqid = proto_input.readMessageBegin()
 
 
@@ -180,7 +181,7 @@ class RpcServer(object):
 
                 else:
                     self.last_request_time = time.time()
-                    frameIO.seek(4)  # 将proto_input复原
+                    trans_input.reset()
                     self.task_pool.spawn(self.handle_request, proto_input, queue, (name, type, seqid))
             except TTransportException as e:
                 # EOF是很正常的现象
