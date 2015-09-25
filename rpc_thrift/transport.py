@@ -158,6 +158,7 @@ class TAutoConnectFramedTransport(TTransportBase, CReadableTransport):
     def __init__(self, socket):
         assert isinstance(socket, TRBuffSocket)
         self.socket = socket
+        self.socket_buf = self.socket.socket_buf
 
         self.wbuf = StringIO()
         self.reset_wbuf()
@@ -175,13 +176,19 @@ class TAutoConnectFramedTransport(TTransportBase, CReadableTransport):
         :param reqlen:
         :return:
         """
+
         l = len(partialread)
         if l == 0:
-            self.socket.socket_buf.purge()
+            self.socket_buf.purge()
 
         # 重复使用同样 _buffer
-        self.socket.socket_buf.peek(reqlen - l)
-        return self.socket.socket_buf._buffer
+        self.socket_buf.peek(reqlen - l)
+
+        if l > 0:
+            # 调整cStringIO中的状态
+            self.socket_buf.unread(l)
+
+        return self.socket_buf._buffer
 
 
     def isOpen(self):
