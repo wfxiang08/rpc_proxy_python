@@ -122,6 +122,7 @@ class RpcWorker(object):
         try:
             if not socket.isOpen():
                 socket.open()
+            socket.setTimeout(5000) # 出现异常，会自己重启
         except TTransportException:
             info_logger.info("Sleep %ds for another retry", self.reconnect_interval)
             time.sleep(self.reconnect_interval)
