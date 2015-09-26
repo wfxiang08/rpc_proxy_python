@@ -5,9 +5,10 @@ import os
 import sys
 import time
 
-ROOT = os.path.dirname(os.path.abspath(os.path.dirname(__file__)))
-if not ROOT in sys.path[:1]:
-    sys.path.insert(0, ROOT)
+
+# ROOT = os.path.dirname(os.path.abspath(os.path.dirname(__file__)))
+# if not ROOT in sys.path[:1]:
+#     sys.path.insert(0, ROOT)
 
 # 这个相对路径如何处理呢?
 from rpc_thrift.services.ttypes import RpcException
@@ -21,6 +22,13 @@ class SimpleTest(TestCase):
 
     def tearDown(self):
         super(SimpleTest, self).tearDown()
+
+    def test_read_write_locations(self):
+        """
+            py.test test/test_protocol.py::SimpleTest::test_read_write_locations -s
+        """
+        from demo.ttypes import Location
+        # Location
 
     def test_read_write_exception(self):
         """

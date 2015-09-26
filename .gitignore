@@ -5,3 +5,6 @@
 /rpc_proxy.egg-info
 *.c
 *.so
+/env
+/.cache
+/gen-py
