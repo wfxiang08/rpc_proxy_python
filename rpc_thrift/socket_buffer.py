@@ -2,7 +2,9 @@
 from __future__ import absolute_import
 
 import socket
+
 from cStringIO import StringIO
+
 import sys
 
 is_new_buffer = sys.version_info > (2, 7, 5)
@@ -28,10 +30,6 @@ class SocketBuffer(object):
         """
         self._sock = socket
         self.purge()
-
-    @property
-    def length(self):
-        return self.bytes_written - self.bytes_read
 
     def _read_from_socket(self, length=None):
         """
