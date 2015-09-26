@@ -34,7 +34,7 @@ def parse_config(config_path):
             config[items[0]] = items[1]
     return config
 
-def print_exception(info_logger):
+def print_exception(info_logger = None):
     '''
     直接输出异常信息
     '''
@@ -42,5 +42,9 @@ def print_exception(info_logger):
     exc = traceback.format_exception(exc_type, exc_value, exc_traceback)
 
     # 以人可以读的方式打印Log
-    info_logger.info("-------------------------")
-    info_logger.info("".join(exc))
+    if info_logger:
+        info_logger.info("-------------------------")
+        info_logger.info("".join(exc))
+    else:
+        print "-------------------------"
+        print "".join(exc)

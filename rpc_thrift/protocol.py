@@ -26,6 +26,10 @@ class TUtf8BinaryProtocol(TBinaryProtocol):
         self.last_name = None
         self.start = None
 
+
+
+
+
         if self.fastbinary:
             TBinaryProtocolPack.TBinaryProtocolAccelerated = TUtf8BinaryProtocol
 

@@ -63,6 +63,8 @@ class RpcException(TException):
     if oprot.__class__ == TBinaryProtocol.TBinaryProtocolAccelerated and self.thrift_spec is not None and fastbinary is not None:
       oprot.trans.write(fastbinary.encode_binary(self, (self.__class__, self.thrift_spec)))
       return
+    # 如何写呢?
+    # 第一个 None 为占位符号
     oprot.writeStructBegin('RpcException')
     if self.code is not None:
       oprot.writeFieldBegin('code', TType.I32, 1)

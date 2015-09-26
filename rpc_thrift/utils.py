@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
 from __future__ import absolute_import
+from thrift.transport.TSocket import TSocket
+from thriftpy.protocol import TCyBinaryProtocol, TMultiplexedProtocol
+from thriftpy.transport import TCyFramedTransport
 
 from rpc_thrift.protocol import TUtf8BinaryProtocol
 from rpc_thrift.transport import TAutoConnectFramedTransport, TRBuffSocket
@@ -20,6 +23,7 @@ def get_base_protocol(endpoint, timeout=5000):
     return get_transport(endpoint, timeout)
 
 def get_transport(endpoint, timeout=5000):
+
     global _transport
     if not _transport:
         if endpoint.find(":") != -1:
@@ -32,9 +36,13 @@ def get_transport(endpoint, timeout=5000):
             port = None
             unix_socket = endpoint
 
-        socket = TRBuffSocket(host=host, port=port, unix_socket=unix_socket)
+        # socket = TRBuffSocket(host=host, port=port, unix_socket=unix_socket)
+        socket = TSocket(host=host, port=port, unix_socket=unix_socket)
         socket.setTimeout(timeout)
-        _transport = TAutoConnectFramedTransport(socket)
+        # _transport = TAutoConnectFramedTransport(socket)
+
+        _transport = TCyFramedTransport(socket)
+
     return _transport
 
 
@@ -70,4 +78,4 @@ def get_service_protocol(service, transport=None, logger=None, fastbinary=False)
     :return:
     """
     transport = transport or _transport
-    return TUtf8BinaryProtocol(transport, service, fastbinary, logger)
+    return  TMultiplexedProtocol(TCyBinaryProtocol(transport), service)
