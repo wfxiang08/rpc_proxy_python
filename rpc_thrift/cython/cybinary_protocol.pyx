@@ -157,6 +157,8 @@ cdef inline write_dict(CyTransportBase buf, object val, spec):
 
 
 cdef inline read_struct(CyTransportBase buf, obj):
+    # obj 为thrift中定义的一个 struct
+    # read_struct 按照 obj.thrift_spec的定义，解析其中的字段
     cdef tuple field_specs = obj.thrift_spec
     cdef int fid
     cdef TType field_type, ttype
@@ -173,7 +175,7 @@ cdef inline read_struct(CyTransportBase buf, obj):
             break
 
         fid = read_i16(buf)
-        if fid not in field_specs:
+        if fid > len(field_specs) or field_specs[fid] is None:
             skip(buf, field_type)
             continue
 
