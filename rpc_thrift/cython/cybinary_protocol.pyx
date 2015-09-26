@@ -73,6 +73,7 @@ cdef inline int write_i08(CyTransportBase buf, char val) except -1:
 
 
 cdef inline int write_i16(CyTransportBase buf, int16_t val) except -1:
+    # 以big endian的方式写数据
     val = htobe16(val)
     buf.c_write(<char*>(&val), 2)
     return 0
@@ -156,7 +157,7 @@ cdef inline write_dict(CyTransportBase buf, object val, spec):
 
 
 cdef inline read_struct(CyTransportBase buf, obj):
-    cdef list field_specs = obj.thrift_spec
+    cdef tuple field_specs = obj.thrift_spec
     cdef int fid
     cdef TType field_type, ttype
     cdef tuple field_spec
@@ -197,36 +198,41 @@ cdef inline read_struct(CyTransportBase buf, obj):
 cdef inline write_struct(CyTransportBase buf, obj):
     cdef int fid
     cdef TType f_type
-    cdef list thrift_spec = obj.thrift_spec # 和thrift保持一致
+    cdef tuple thrift_spec = obj.thrift_spec # 和thrift保持一致
     cdef tuple field_spec
     cdef str f_name
 
+    # writeStructBegin 空操作
     for field_spec in thrift_spec:
         # thrift_spec[0] 为 None，可能为占位符号
         if field_spec is None:
             continue
 
-        fid = field_spec[0]
-        f_type = field_spec[1]
+        # fid = field_spec[0]
+        # f_type = field_spec[1]
         f_name = field_spec[2]
-        if len(field_spec) <= 3 or field_spec[3] is None:
-            container_spec = None
-        else:
-            container_spec = field_spec[3]
+        # container_spec = field_spec[3]
 
         v = getattr(obj, f_name)
         if v is None:
             continue
 
-        write_i08(buf, f_type)
-        write_i16(buf, fid)
+
+        fid = field_spec[0]
+        f_type = field_spec[1]
+        container_spec = field_spec[3]
+        # print "fid: %s, f_type: %s" % (fid, f_type)
+
+        # writeFieldBegin
+        write_i08(buf, f_type)  # writeByte
+        write_i16(buf, fid)     # writeI16
         try:
             c_write_val(buf, f_type, v, container_spec)
         except (TypeError, AttributeError, AssertionError, OverflowError):
             raise TDecodeException(obj.__class__.__name__, fid, f_name, v,
                                    f_type, container_spec)
 
-    write_i08(buf, T_STOP)
+    write_i08(buf, T_STOP) # writeFieldStop
 
 
 cdef inline c_read_string(CyTransportBase buf, int32_t size):
@@ -349,6 +355,7 @@ cdef c_write_val(CyTransportBase buf, TType ttype, val, spec=None):
         write_double(buf, val)
 
     elif ttype == T_STRING:
+        #  确保为utf8格式的bytes
         if not isinstance(val, bytes):
             try:
                 val = val.encode("utf-8")

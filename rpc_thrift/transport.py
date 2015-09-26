@@ -286,7 +286,12 @@ class TMemoryBuffer(TTransportBase):
     def reset(self):
         self._buffer.reset()
     def write(self, buf):
+        # print "Buff: ", ["%03d" % ord(i) for i in buf]
         self._buffer.write(buf)
+
+    def get_raw_value(self):
+        return self._buffer.getvalue(True)
+
     def getvalue(self):
         """
         只给可写的StringIO提供支持, 返回的是 string, 也就是只读的

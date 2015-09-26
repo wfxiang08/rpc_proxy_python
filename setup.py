@@ -17,6 +17,10 @@ requirements = [
 if sys.version_info < (2, 7):
     requirements.append('argparse')
 
+from distutils.core import setup
+from Cython.Build import cythonize
+
+
 setup(
     name='rpc_proxy',
     version="0.9.1",
@@ -24,14 +28,7 @@ setup(
     author="wangfei@chunyu.me",
     url='https://git.chunyu.me/infra/rpc_proxy/tree/master/lib',
     packages=['rpc_thrift', 'rpc_thrift.services', 'rpc_thrift.log_utils'],
-    # install_requires=requirements,
     zip_safe=False,
     license='MIT',
-    classifiers=(
-        'Development Status :: 5 - Production/Stable',
-        'Intended Audience :: Developers',
-        'Natural Language :: English',
-        'License :: OSI Approved :: MIT License',
-        'Programming Language :: Python',
-    ),
+    ext_modules = cythonize("**/*.pyx"),
 )

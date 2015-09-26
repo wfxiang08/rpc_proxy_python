@@ -3,3 +3,5 @@
 /dist
 /build
 /rpc_proxy.egg-info
+*.c
+*.so
