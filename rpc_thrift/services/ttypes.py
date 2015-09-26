@@ -4,17 +4,18 @@
 #
 # DO NOT EDIT UNLESS YOU ARE SURE THAT YOU KNOW WHAT YOU ARE DOING
 #
-#  options string: py
+#  options string: py:slots
 #
 
+from __future__ import absolute_import
 from thrift.Thrift import TType, TMessageType, TException, TApplicationException
 
 from thrift.transport import TTransport
 from thrift.protocol import TBinaryProtocol, TProtocol
 try:
-  from thrift.protocol import fastbinary
+  from rpc_thrift.cython.cybinary_protocol import TCyBinaryProtocol
 except:
-  fastbinary = None
+  TCyBinaryProtocol = None
 
 
 
@@ -24,6 +25,11 @@ class RpcException(TException):
    - code
    - msg
   """
+
+  __slots__ = [ 
+    'code',
+    'msg',
+   ]
 
   thrift_spec = (
     None, # 0
@@ -36,8 +42,8 @@ class RpcException(TException):
     self.msg = msg
 
   def read(self, iprot):
-    if iprot.__class__ == TBinaryProtocol.TBinaryProtocolAccelerated and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None and fastbinary is not None:
-      fastbinary.decode_binary(self, iprot.trans, (self.__class__, self.thrift_spec))
+    if iprot.__class__ == TCyBinaryProtocol and self.thrift_spec is not None:
+      iprot.read_struct(self)
       return
     iprot.readStructBegin()
     while True:
@@ -60,11 +66,9 @@ class RpcException(TException):
     iprot.readStructEnd()
 
   def write(self, oprot):
-    if oprot.__class__ == TBinaryProtocol.TBinaryProtocolAccelerated and self.thrift_spec is not None and fastbinary is not None:
-      oprot.trans.write(fastbinary.encode_binary(self, (self.__class__, self.thrift_spec)))
+    if oprot.__class__ == TCyBinaryProtocol and self.thrift_spec is not None:
+      oprot.write_struct(self)
       return
-    # 如何写呢?
-    # 第一个 None 为占位符号
     oprot.writeStructBegin('RpcException')
     if self.code is not None:
       oprot.writeFieldBegin('code', TType.I32, 1)
@@ -91,12 +95,20 @@ class RpcException(TException):
     return value
 
   def __repr__(self):
-    L = ['%s=%r' % (key, value)
-      for key, value in self.__dict__.iteritems()]
+    L = ['%s=%r' % (key, getattr(self, key))
+      for key in self.__slots__]
     return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
   def __eq__(self, other):
-    return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+    if not isinstance(other, self.__class__):
+      return False
+    for attr in self.__slots__:
+      my_val = getattr(self, attr)
+      other_val = getattr(other, attr)
+      if my_val != other_val:
+        return False
+    return True
 
   def __ne__(self, other):
     return not (self == other)
+

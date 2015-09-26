@@ -4,22 +4,32 @@
 #
 # DO NOT EDIT UNLESS YOU ARE SURE THAT YOU KNOW WHAT YOU ARE DOING
 #
-#  options string: py
+#  options string: py:slots
 #
 
+from __future__ import absolute_import
 from thrift.Thrift import TType, TMessageType, TException, TApplicationException
-from ttypes import *
+from rpc_thrift.services.ttypes import *
 from thrift.Thrift import TProcessor
 from thrift.transport import TTransport
 from thrift.protocol import TBinaryProtocol, TProtocol
 try:
-  from thrift.protocol import fastbinary
+  from rpc_thrift.cython.cybinary_protocol import TCyBinaryProtocol
 except:
-  fastbinary = None
+  TCyBinaryProtocol = None
 
 
 class Iface:
   def ping(self):
+    """
+    用于rpc client和rpc server连通性和网络延时测试
+    """
+    pass
+
+  def ping1(self):
+    """
+    用于rpc client和rpc proxy的连接测试&网络延时测试
+    """
     pass
 
 
@@ -30,20 +40,10 @@ class Client(Iface):
       self._oprot = oprot
     self._seqid = 0
 
-  def ping1(self):
-    self.send_ping1()
-    self.recv_ping()
-
-  def send_ping1(self):
-    # MESSAGE_TYPE_HEART_BEAT 20
-    # 配合proxy使用
-    self._oprot.writeMessageBegin('ping', 20, self._seqid)
-    args = ping_args()
-    args.write(self._oprot)
-    self._oprot.writeMessageEnd()
-    self._oprot.trans.flush()
-
   def ping(self):
+    """
+    用于rpc client和rpc server连通性和网络延时测试
+    """
     self.send_ping()
     self.recv_ping()
 
@@ -67,12 +67,40 @@ class Client(Iface):
     iprot.readMessageEnd()
     return
 
+  def ping1(self):
+    """
+    用于rpc client和rpc proxy的连接测试&网络延时测试
+    """
+    self.send_ping1()
+    self.recv_ping1()
+
+  def send_ping1(self):
+    self._oprot.writeMessageBegin('ping1', TMessageType.CALL, self._seqid)
+    args = ping1_args()
+    args.write(self._oprot)
+    self._oprot.writeMessageEnd()
+    self._oprot.trans.flush()
+
+  def recv_ping1(self):
+    iprot = self._iprot
+    (fname, mtype, rseqid) = iprot.readMessageBegin()
+    if mtype == TMessageType.EXCEPTION:
+      x = TApplicationException()
+      x.read(iprot)
+      iprot.readMessageEnd()
+      raise x
+    result = ping1_result()
+    result.read(iprot)
+    iprot.readMessageEnd()
+    return
+
 
 class Processor(Iface, TProcessor):
   def __init__(self, handler):
     self._handler = handler
     self._processMap = {}
     self._processMap["ping"] = Processor.process_ping
+    self._processMap["ping1"] = Processor.process_ping1
 
   def process(self, iprot, oprot):
     (name, type, seqid) = iprot.readMessageBegin()
@@ -100,18 +128,31 @@ class Processor(Iface, TProcessor):
     oprot.writeMessageEnd()
     oprot.trans.flush()
 
+  def process_ping1(self, seqid, iprot, oprot):
+    args = ping1_args()
+    args.read(iprot)
+    iprot.readMessageEnd()
+    result = ping1_result()
+    self._handler.ping1()
+    oprot.writeMessageBegin("ping1", TMessageType.REPLY, seqid)
+    result.write(oprot)
+    oprot.writeMessageEnd()
+    oprot.trans.flush()
+
 
 # HELPER FUNCTIONS AND STRUCTURES
 
 class ping_args:
 
+  __slots__ = [ 
+   ]
+
   thrift_spec = (
   )
 
   def read(self, iprot):
-    # TBinaryProtocolAccelerated 只是一个象征，基本上也没啥事
-    if iprot.__class__ == TBinaryProtocol.TBinaryProtocolAccelerated and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None and fastbinary is not None:
-      fastbinary.decode_binary(self, iprot.trans, (self.__class__, self.thrift_spec))
+    if iprot.__class__ == TCyBinaryProtocol and self.thrift_spec is not None:
+      iprot.read_struct(self)
       return
     iprot.readStructBegin()
     while True:
@@ -124,8 +165,8 @@ class ping_args:
     iprot.readStructEnd()
 
   def write(self, oprot):
-    if oprot.__class__ == TBinaryProtocol.TBinaryProtocolAccelerated and self.thrift_spec is not None and fastbinary is not None:
-      oprot.trans.write(fastbinary.encode_binary(self, (self.__class__, self.thrift_spec)))
+    if oprot.__class__ == TCyBinaryProtocol and self.thrift_spec is not None:
+      oprot.write_struct(self)
       return
     oprot.writeStructBegin('ping_args')
     oprot.writeFieldStop()
@@ -140,24 +181,35 @@ class ping_args:
     return value
 
   def __repr__(self):
-    L = ['%s=%r' % (key, value)
-      for key, value in self.__dict__.iteritems()]
+    L = ['%s=%r' % (key, getattr(self, key))
+      for key in self.__slots__]
     return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
   def __eq__(self, other):
-    return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+    if not isinstance(other, self.__class__):
+      return False
+    for attr in self.__slots__:
+      my_val = getattr(self, attr)
+      other_val = getattr(other, attr)
+      if my_val != other_val:
+        return False
+    return True
 
   def __ne__(self, other):
     return not (self == other)
 
+
 class ping_result:
+
+  __slots__ = [ 
+   ]
 
   thrift_spec = (
   )
 
   def read(self, iprot):
-    if iprot.__class__ == TBinaryProtocol.TBinaryProtocolAccelerated and isinstance(iprot.trans, TTransport.CReadableTransport) and self.thrift_spec is not None and fastbinary is not None:
-      fastbinary.decode_binary(self, iprot.trans, (self.__class__, self.thrift_spec))
+    if iprot.__class__ == TCyBinaryProtocol and self.thrift_spec is not None:
+      iprot.read_struct(self)
       return
     iprot.readStructBegin()
     while True:
@@ -170,8 +222,8 @@ class ping_result:
     iprot.readStructEnd()
 
   def write(self, oprot):
-    if oprot.__class__ == TBinaryProtocol.TBinaryProtocolAccelerated and self.thrift_spec is not None and fastbinary is not None:
-      oprot.trans.write(fastbinary.encode_binary(self, (self.__class__, self.thrift_spec)))
+    if oprot.__class__ == TCyBinaryProtocol and self.thrift_spec is not None:
+      oprot.write_struct(self)
       return
     oprot.writeStructBegin('ping_result')
     oprot.writeFieldStop()
@@ -186,12 +238,134 @@ class ping_result:
     return value
 
   def __repr__(self):
-    L = ['%s=%r' % (key, value)
-      for key, value in self.__dict__.iteritems()]
+    L = ['%s=%r' % (key, getattr(self, key))
+      for key in self.__slots__]
     return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
 
   def __eq__(self, other):
-    return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+    if not isinstance(other, self.__class__):
+      return False
+    for attr in self.__slots__:
+      my_val = getattr(self, attr)
+      other_val = getattr(other, attr)
+      if my_val != other_val:
+        return False
+    return True
 
   def __ne__(self, other):
     return not (self == other)
+
+
+class ping1_args:
+
+  __slots__ = [ 
+   ]
+
+  thrift_spec = (
+  )
+
+  def read(self, iprot):
+    if iprot.__class__ == TCyBinaryProtocol and self.thrift_spec is not None:
+      iprot.read_struct(self)
+      return
+    iprot.readStructBegin()
+    while True:
+      (fname, ftype, fid) = iprot.readFieldBegin()
+      if ftype == TType.STOP:
+        break
+      else:
+        iprot.skip(ftype)
+      iprot.readFieldEnd()
+    iprot.readStructEnd()
+
+  def write(self, oprot):
+    if oprot.__class__ == TCyBinaryProtocol and self.thrift_spec is not None:
+      oprot.write_struct(self)
+      return
+    oprot.writeStructBegin('ping1_args')
+    oprot.writeFieldStop()
+    oprot.writeStructEnd()
+
+  def validate(self):
+    return
+
+
+  def __hash__(self):
+    value = 17
+    return value
+
+  def __repr__(self):
+    L = ['%s=%r' % (key, getattr(self, key))
+      for key in self.__slots__]
+    return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
+
+  def __eq__(self, other):
+    if not isinstance(other, self.__class__):
+      return False
+    for attr in self.__slots__:
+      my_val = getattr(self, attr)
+      other_val = getattr(other, attr)
+      if my_val != other_val:
+        return False
+    return True
+
+  def __ne__(self, other):
+    return not (self == other)
+
+
+class ping1_result:
+
+  __slots__ = [ 
+   ]
+
+  thrift_spec = (
+  )
+
+  def read(self, iprot):
+    if iprot.__class__ == TCyBinaryProtocol and self.thrift_spec is not None:
+      iprot.read_struct(self)
+      return
+    iprot.readStructBegin()
+    while True:
+      (fname, ftype, fid) = iprot.readFieldBegin()
+      if ftype == TType.STOP:
+        break
+      else:
+        iprot.skip(ftype)
+      iprot.readFieldEnd()
+    iprot.readStructEnd()
+
+  def write(self, oprot):
+    if oprot.__class__ == TCyBinaryProtocol and self.thrift_spec is not None:
+      oprot.write_struct(self)
+      return
+    oprot.writeStructBegin('ping1_result')
+    oprot.writeFieldStop()
+    oprot.writeStructEnd()
+
+  def validate(self):
+    return
+
+
+  def __hash__(self):
+    value = 17
+    return value
+
+  def __repr__(self):
+    L = ['%s=%r' % (key, getattr(self, key))
+      for key in self.__slots__]
+    return '%s(%s)' % (self.__class__.__name__, ', '.join(L))
+
+  def __eq__(self, other):
+    if not isinstance(other, self.__class__):
+      return False
+    for attr in self.__slots__:
+      my_val = getattr(self, attr)
+      other_val = getattr(other, attr)
+      if my_val != other_val:
+        return False
+    return True
+
+  def __ne__(self, other):
+    return not (self == other)
+

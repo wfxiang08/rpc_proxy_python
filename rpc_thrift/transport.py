@@ -150,7 +150,7 @@ class TRBuffSocket(TSocketBase):
 
 PLACE_HOLDER_4_bytes = "1234"
 
-class TAutoConnectFramedTransport(TTransportBase, CReadableTransport):
+class TAutoConnectFramedTransport(TTransportBase):
     """
         将socket进行包装，提供了自动重连的功能, 重连之后清空之前的状态
     """
@@ -162,33 +162,6 @@ class TAutoConnectFramedTransport(TTransportBase, CReadableTransport):
 
         self.wbuf = StringIO()
         self.reset_wbuf()
-
-    @property
-    def cstringio_buf(self):
-        # thrift的fastbinary.c代码经过
-        # https://github.com/wfxiang08/thrift/commit/198862d6d164f28c7862a71a88758d3c566465b3
-        return self.socket.socket_buf._buffer
-
-    def cstringio_refill(self, partialread, reqlen):
-        """
-        cStringIO中的数据不够
-        :param partialread:
-        :param reqlen:
-        :return:
-        """
-
-        l = len(partialread)
-        if l == 0:
-            self.socket_buf.purge()
-
-        # 重复使用同样 _buffer
-        self.socket_buf.peek(reqlen - l)
-
-        if l > 0:
-            # 调整cStringIO中的状态
-            self.socket_buf.unread(l)
-
-        return self.socket_buf._buffer
 
 
     def isOpen(self):

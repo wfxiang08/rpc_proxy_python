@@ -1,11 +1,13 @@
 # -*- coding: utf-8 -*-
 from __future__ import absolute_import
-from thrift.transport.TSocket import TSocket
-from thriftpy.protocol import TCyBinaryProtocol, TMultiplexedProtocol
-from thriftpy.transport import TCyFramedTransport
+from thrift.protocol.TMultiplexedProtocol import TMultiplexedProtocol
 
-from rpc_thrift.protocol import TUtf8BinaryProtocol
+from thrift.transport.TSocket import TSocket
+from rpc_thrift.cython.cybinary_protocol import TCyBinaryProtocol
+from rpc_thrift.cython.cyframed_transport import TCyFramedTransport
+
 from rpc_thrift.transport import TAutoConnectFramedTransport, TRBuffSocket
+
 
 
 

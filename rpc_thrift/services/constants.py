@@ -4,9 +4,10 @@
 #
 # DO NOT EDIT UNLESS YOU ARE SURE THAT YOU KNOW WHAT YOU ARE DOING
 #
-#  options string: py
+#  options string: py:slots
 #
 
+from __future__ import absolute_import
 from thrift.Thrift import TType, TMessageType, TException, TApplicationException
-from ttypes import *
+from rpc_thrift.services.ttypes import *
 
