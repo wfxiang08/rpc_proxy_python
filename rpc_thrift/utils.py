@@ -41,6 +41,7 @@ def get_transport(endpoint, timeout=5000):
         # socket = TRBuffSocket(host=host, port=port, unix_socket=unix_socket)
         socket = TSocket(host=host, port=port, unix_socket=unix_socket)
         socket.setTimeout(timeout)
+        socket.open()
         # _transport = TAutoConnectFramedTransport(socket)
 
         _transport = TCyFramedTransport(socket)
@@ -80,4 +81,4 @@ def get_service_protocol(service, transport=None, logger=None, fastbinary=False)
     :return:
     """
     transport = transport or _transport
-    return  TMultiplexedProtocol(TCyBinaryProtocol(transport), service)
+    return  TCyBinaryProtocol(transport, service=service)

@@ -424,16 +424,18 @@ cdef class TCyBinaryProtocol(object):
     cdef public CyTransportBase trans
     cdef public bool strict_read
     cdef public bool strict_write
+    cdef public str  service
 
-    def __init__(self, trans, strict_read=True, strict_write=True):
+    def __init__(self, trans, strict_read=True, strict_write=True, service=None):
         self.trans = trans
         self.strict_read = strict_read
         self.strict_write = strict_write
+        self.service = service
 
     def skip(self, ttype):
         skip(self.trans, <TType>(ttype))
 
-    def readMessageEnd(self):
+    def readMessageBegin(self):
         cdef int32_t size, version, seqid
         cdef TType ttype
 
@@ -461,11 +463,19 @@ cdef class TCyBinaryProtocol(object):
 
     def writeMessageBegin(self, name, TType ttype, int32_t seqid):
         cdef int32_t version = VERSION_1 | ttype
+
         if self.strict_write:
             write_i32(self.trans, version)
-            c_write_val(self.trans, T_STRING, name)
+            if self.service:
+                c_write_val(self.trans, T_STRING, self.service + ":" + name)
+            else:
+                c_write_val(self.trans, T_STRING, name)
         else:
-            c_write_val(self.trans, T_STRING, name)
+            if self.service:
+                c_write_val(self.trans, T_STRING, self.service + ":" + name)
+            else:
+                c_write_val(self.trans, T_STRING, name)
+
             write_i08(self.trans, ttype)
 
         write_i32(self.trans, seqid)

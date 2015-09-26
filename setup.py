@@ -8,6 +8,7 @@ try:
     from setuptools import setup
 except ImportError:
     from distutils.core import setup
+from setuptools.extension import Extension
 
 requirements = [
     'gevent>=1.0',
@@ -19,16 +20,25 @@ if sys.version_info < (2, 7):
 
 from distutils.core import setup
 from Cython.Build import cythonize
+from Cython.Distutils import build_ext
 
+ext_modules = []
+# cythonize("rpc_thrift/cython/*.pyx")
+
+files = ["cybase", "cybinary_protocol", "cyframed_transport", "cymemory_transport"]
+for f in files:
+    ext_modules.append(Extension("rpc_thrift.cython.%s" % f, ["rpc_thrift/cython/cybase.pxd", "rpc_thrift/cython/%s.pyx" % f]))
 
 setup(
     name='rpc_proxy',
     version="0.9.1",
     description='rpc_proxy is a flexible RPC based on thrift.',
-    author="wangfei@chunyu.me",
+    author="wangfei",
+    author_email="wangfei@chunyu.me",
     url='https://git.chunyu.me/infra/rpc_proxy/tree/master/lib',
-    packages=['rpc_thrift', 'rpc_thrift.services', 'rpc_thrift.log_utils'],
+    packages=['rpc_thrift', 'rpc_thrift.services', 'rpc_thrift.log_utils', 'rpc_thrift.cython'],
     zip_safe=False,
     license='MIT',
-    ext_modules = cythonize("**/*.pyx"),
+    cmdclass = {'build_ext': build_ext},
+    ext_modules=ext_modules,
 )
