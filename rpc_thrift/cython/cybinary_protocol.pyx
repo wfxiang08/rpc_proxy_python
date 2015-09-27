@@ -5,6 +5,7 @@ from cpython cimport bool
 from rpc_thrift.cython.cybase cimport CyTransportBase, STACK_STRING_LEN
 
 from rpc_thrift.cython import TDecodeException
+from time import time
 
 cdef extern from "endian_port.h":
     int16_t htobe16(int16_t n)
@@ -161,7 +162,7 @@ cdef inline read_struct(CyTransportBase buf, obj):
             break
 
         fid = read_i16(buf)
-        if fid > len(field_specs) or field_specs[fid] is None:
+        if fid >= len(field_specs) or fid < 0 or field_specs[fid] is None:
             skip(buf, field_type)
             continue
 
@@ -413,11 +414,16 @@ cdef class TCyBinaryProtocol(object):
         bool strict_read
         bool strict_write
         str  service
-    def __init__(self, trans, strict_read=True, strict_write=True, service=None):
+        object logger
+        double lastWriteTime
+
+
+    def __init__(self, trans, strict_read=True, strict_write=True, service=None, logger=None):
         self.trans = trans
         self.strict_read = strict_read
         self.strict_write = strict_write
         self.service = service
+        self.logger = logger
 
     def skip(self, ttype):
         skip(self.trans, <TType>(ttype))
@@ -425,6 +431,7 @@ cdef class TCyBinaryProtocol(object):
     cpdef readMessageBegin(self):
         cdef int32_t size, version, seqid
         cdef TType ttype
+        cdef double elapsed;
 
         size = read_i32(self.trans)
         if size < 0:
@@ -443,6 +450,12 @@ cdef class TCyBinaryProtocol(object):
 
         seqid = read_i32(self.trans)
 
+        elapsed = (time() - self.lastWriteTime) * 1000
+        if self.logger:
+            method = self.service + ":" + name
+            self.logger.info("\033[35m[RPC] %s\033[39m[%d] ends, Elapsed: %.3fms", method, seqid, elapsed)
+
+
         return name, ttype, seqid
 
     def readMessageEnd(self):
@@ -450,6 +463,8 @@ cdef class TCyBinaryProtocol(object):
 
     cpdef writeMessageBegin(self, name, TType ttype, int32_t seqid):
         cdef int32_t version = VERSION_1 | ttype
+
+        self.lastWriteTime = time()
 
         if self.strict_write:
             write_i32(self.trans, version)

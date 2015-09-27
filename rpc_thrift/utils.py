@@ -111,7 +111,7 @@ def get_service_protocol(service, transport=None, logger=None, fastbinary=False,
     """
     if fast:
         transport = transport or _fast_transport
-        return  TCyBinaryProtocol(transport, service=service)
+        return  TCyBinaryProtocol(transport, service=service, logger=logger)
     else:
         transport = transport or _transport
         return TUtf8BinaryProtocol(transport, service_name=service, logger=logger)
