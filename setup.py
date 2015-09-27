@@ -26,12 +26,10 @@ ext_modules = []
 files = ["cybase", "cybinary_protocol", "cyframed_transport", "cymemory_transport"]
 for f in files:
     ext_modules.append(Extension("rpc_thrift.cython.%s" % f, ["rpc_thrift/cython/cyframed_transport.pxd",
-                                                              "rpc_thrift/cython/cybinary_protocol.pxd",
                                                               "rpc_thrift/cython/cymemory_transport.pxd",
                                                               "rpc_thrift/cython/cybase.pxd",
                                                               "rpc_thrift/cython/%s.pyx" % f]))
 
-# ext_modules.append(Extension("rpc_thrift.server", ["rpc_thrift/server.pyx"]))
 
 setup(
     name='rpc_proxy',

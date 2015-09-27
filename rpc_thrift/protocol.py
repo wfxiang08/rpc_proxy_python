@@ -26,13 +26,6 @@ class TUtf8BinaryProtocol(TBinaryProtocol):
         self.last_name = None
         self.start = None
 
-
-
-
-
-        if self.fastbinary:
-            TBinaryProtocolPack.TBinaryProtocolAccelerated = TUtf8BinaryProtocol
-
     def writeString(self, v):
         """
             只要控制好了writeString, 在整个thrift系统中，所有的字符串都是utf-8格式的

@@ -26,54 +26,53 @@ class SimpleTest(TestCase):
     def tearDown(self):
         super(SimpleTest, self).tearDown()
 
+
+    def test_locations(self):
+        """
+            py.test test/test_protocol.py::SimpleTest::test_locations -s
+        """
+        # 结构中包含结构
+        locs = Locations(loc=Location("测试"))
+        self._test_protocol_write(locs)
+        locs1 = self._test_write_and_read(locs)
+        print locs1.loc.city
+
+
+
+        locs = Locations(loc_list=[Location(u"武汉", "湖北", ["名字", u"姓名"])])
+        self._test_protocol_write(locs)
+        locs1 = self._test_write_and_read(locs)
+        print locs1.loc_list[0].city
+
+
+
+        locs = Locations(list_map=[{1:Location(u"武汉", "湖北", ["名字", u"姓名"])}])
+        self._test_protocol_write(locs)
+        locs1 = self._test_write_and_read(locs)
+        print locs1.list_map[0][1].city
+
+
     def test_read_write_locations(self):
         """
             py.test test/test_protocol.py::SimpleTest::test_read_write_locations -s
         """
 
         loc0 = Location(u"武汉", "湖北", ["名字", u"姓名"])
-        self._test_read_write_ok(loc0)
+        self._test_protocol_write(loc0)
 
         loc1 = Location(u"武汉", "湖北", ("名字", u"姓名"))
-        self._test_read_write_ok(loc1)
+        self._test_protocol_write(loc1)
 
         locs = Locations([loc0, loc1], None, [1, 2, 4])
-        self._test_read_write_ok(locs)
+        self._test_protocol_write(locs)
 
 
-        locs1 = self.decode_write(locs)
+        locs1 = self._test_write_and_read(locs)
         self.assertEqual(len(locs.locations), len(locs1.locations))
         self.assertEqual(locs.strs, locs1.strs)
         print "locs1 ints: ", locs1.ints
 
 
-    def _test_read_write_ok(self, obj):
-        # cython版本
-        buff0 = TCyMemoryBuffer()
-        op0 = TCyBinaryProtocol(buff0)
-        op0.write_struct(obj)
-        value0 = buff0.getvalue()
-
-        # Python版本
-        buff1 = TMemoryBuffer()
-        op1 = TUtf8BinaryProtocol(buff1)
-        obj.write(op1)
-        value1 = buff1.get_raw_value()
-
-        self.assertEqual(value1, value0, "write result not the same")
-
-
-    def decode_write(self, obj):
-        buff0 = TCyMemoryBuffer()
-        op0 = TCyBinaryProtocol(buff0)
-        op0.write_struct(obj)
-        value0 = buff0.getvalue()
-
-        buff1 = TCyMemoryBuffer(value0)
-        op1 = TCyBinaryProtocol(buff1)
-        obj1 = obj.__class__()
-
-        return op1.read_struct(obj1)
 
     def test_read_write_exception(self):
         """
@@ -82,7 +81,7 @@ class SimpleTest(TestCase):
         """
         ex = RpcException(1, "Hello")
 
-        self._test_read_write_ok(ex)
+        self._test_protocol_write(ex)
 
         total_time = 1
         t = time.time()
@@ -118,3 +117,31 @@ class SimpleTest(TestCase):
         print "Value1:", ["%03d" % ord(i) for i in value1]
 
         self.assertEqual(value1, value0, "write struct test failed")
+
+    def _test_protocol_write(self, obj):
+        # cython版本
+        buff0 = TCyMemoryBuffer()
+        op0 = TCyBinaryProtocol(buff0)
+        op0.write_struct(obj)
+        value0 = buff0.getvalue()
+
+        # Python版本
+        buff1 = TMemoryBuffer()
+        op1 = TUtf8BinaryProtocol(buff1)
+        obj.write(op1)
+        value1 = buff1.get_raw_value()
+
+        self.assertEqual(value1, value0, "write result not the same")
+
+
+    def _test_write_and_read(self, obj):
+        buff0 = TCyMemoryBuffer()
+        op0 = TCyBinaryProtocol(buff0)
+        op0.write_struct(obj)
+        value0 = buff0.getvalue()
+
+        buff1 = TCyMemoryBuffer(value0)
+        op1 = TCyBinaryProtocol(buff1)
+        obj1 = obj.__class__()
+
+        return op1.read_struct(obj1)

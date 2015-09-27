@@ -18,6 +18,26 @@ DEF VERSION_MASK = -65536
 DEF VERSION_1 = -2147418112
 DEF TYPE_MASK = 0x000000ff
 
+ctypedef enum TType:
+    T_STOP = 0,
+    T_VOID = 1,
+    T_BOOL = 2,
+    T_BYTE = 3,
+    T_I08 = 3,
+    T_I16 = 6,
+    T_I32 = 8,
+    T_U64 = 9,
+    T_I64 = 10,
+    T_DOUBLE = 4,
+    T_STRING = 11,
+    T_UTF7 = 11,
+    T_NARY = 11
+    T_STRUCT = 12,
+    T_MAP = 13,
+    T_SET = 14,
+    T_LIST = 15,
+    T_UTF8 = 16,
+    T_UTF16 = 17
 
 
 class ProtocolError(Exception):
@@ -84,12 +104,8 @@ cdef inline write_list(CyTransportBase buf, object val, spec):
     cdef TType e_type
     cdef int val_len
 
-    if isinstance(spec, int):
-        e_type = spec
-        e_spec = None
-    else:
-        e_type = spec[0]
-        e_spec = spec[1]
+    e_type = spec[0]
+    e_spec = spec[1]
 
     val_len = len(val)
     write_i08(buf, e_type)
@@ -110,21 +126,10 @@ cdef inline write_dict(CyTransportBase buf, object val, spec):
     cdef int val_len
     cdef TType v_type, k_type
 
-    key = spec[0]
-    if isinstance(key, int):
-        k_type = key
-        k_spec = None
-    else:
-        k_type = key[0]
-        k_spec = key[1]
-
-    value = spec[1]
-    if isinstance(value, int):
-        v_type = value
-        v_spec = None
-    else:
-        v_type = value[0]
-        v_spec = value[1]
+    k_type = spec[0]
+    k_spec = spec[1]
+    v_type = spec[2]
+    v_spec = spec[3]
 
     val_len = len(val)
 
@@ -167,12 +172,12 @@ cdef inline read_struct(CyTransportBase buf, obj):
             continue
 
         name = field_spec[2]
-        if len(field_spec) <= 3 or field_spec[3] is None:
-            spec = None
-        else:
-            spec = field_spec[3]
+        spec = field_spec[3]
 
         # 将读取的结果 和 name关联
+        # (1, TType.STRING, 'city', None, None, )
+        # (3, TType.LIST, 'names', (TType.STRING,None), None, )
+        # (1, TType.LIST, 'locations', (TType.STRUCT,(Location, Location.thrift_spec)), None, ), # 1
         setattr(obj, name, c_read_val(buf, ttype, spec))
 
     return obj
@@ -205,6 +210,8 @@ cdef inline write_struct(CyTransportBase buf, obj):
         f_type = field_spec[1]
         container_spec = field_spec[3]
         # print "fid: %s, f_type: %s" % (fid, f_type)
+        # (3, TType.LIST, 'names', (TType.STRING,None), None, )
+        # (1, TType.LIST, 'locations', (TType.STRUCT,(Location, Location.thrift_spec)), None, ), # 1
 
         # writeFieldBegin
         write_i08(buf, f_type)  # writeByte
@@ -265,14 +272,15 @@ cdef c_read_val(CyTransportBase buf, TType ttype, spec=None):
         return c_read_string(buf, size)
 
     elif ttype == T_SET or ttype == T_LIST:
-        # 如果是基本类型，则只需要type
-        # (7, TType.LIST, 'similar_checkups', (TType.STRUCT,(TermCounter, TermCounter.thrift_spec)), None, )
-        # (4, TType.LIST, 'names', (TType.STRING,None), None, )
+        # (3, TType.LIST, 'names', (TType.STRING,None), None, )
+        # (1, TType.LIST, 'locations', (TType.STRUCT,(Location, Location.thrift_spec)), None, ), # 1
+        # (7, TType.LIST, 'loc_list', (TType.STRUCT,(Location, Location.thrift_spec)), None, ), # 7
+        # (8, TType.LIST, 'list_map', (TType.MAP,(TType.I32,None,TType.STRUCT,(Location, Location.thrift_spec))), None, ), # 8
+        #
+        # list/set之后的元素要么是简单类型: int, string等
+        #                  要么是复杂类型，
         v_type = spec[0]
-        if spec[1] is None:
-            v_spec = None
-        else:
-            v_spec = spec[1][0] # 只获取spec的class即可, class的thrift_spec可通过spec自动获取
+        v_spec = spec[1]
 
         orig_type = <TType>read_i08(buf)
         size = read_i32(buf)
@@ -285,37 +293,35 @@ cdef c_read_val(CyTransportBase buf, TType ttype, spec=None):
         return [c_read_val(buf, v_type, v_spec) for _ in range(size)]
 
     elif ttype == T_MAP:
-        key = spec[0]
-        if isinstance(key, int):
-            k_type = key
-            k_spec = None
-        else:
-            k_type = key[0]
-            k_spec = key[1]
+        # (4, TType.MAP, 'id2name', (TType.I32,None,TType.STRING,None), None, ), # 4
+        # (5, TType.MAP, 'id2loc', (TType.I32,None,TType.STRUCT,(Location, Location.thrift_spec)), None, ), # 5
 
-        value = spec[1]
-        if isinstance(value, int):
-            v_type = value
-            v_spec = None
-        else:
-            v_type = value[0]
-            v_spec = value[1]
+        k_type = spec[0]
+        k_spec = spec[1]
 
+        v_type = spec[2]
+        v_spec = spec[3]
+
+        # 读取key_type, value_type, size
         orig_key_type = <TType>read_i08(buf)
         orig_type = <TType>read_i08(buf)
         size = read_i32(buf)
 
+        # 认为数据是一致的
         if orig_key_type != k_type or orig_type != v_type:
             for _ in range(size):
                 skip(buf, orig_key_type)
                 skip(buf, orig_type)
             return {}
 
-        return {c_read_val(buf, k_type, k_spec): c_read_val(buf, v_type, v_spec)
-                for _ in range(size)}
+        return {c_read_val(buf, k_type, k_spec): c_read_val(buf, v_type, v_spec) for _ in range(size)}
 
     elif ttype == T_STRUCT:
-        return read_struct(buf, spec())
+        # (6, TType.STRUCT, 'loc', (Location, Location.thrift_spec), None, ), # 6
+        # spec格式: (Location, Location.thrift_spec)
+        #   spec[0] 表示 struct的类型, spec[1] 没有必要直接使用
+        #   spec[0]() 构造struct对象
+        return read_struct(buf, spec[0]())
 
 
 cdef c_write_val(CyTransportBase buf, TType ttype, val, spec=None):
@@ -402,6 +408,11 @@ def write_val(CyTransportBase buf, TType ttype, val, spec=None):
 
 
 cdef class TCyBinaryProtocol(object):
+    cdef:
+        public CyTransportBase trans
+        bool strict_read
+        bool strict_write
+        str  service
     def __init__(self, trans, strict_read=True, strict_write=True, service=None):
         self.trans = trans
         self.strict_read = strict_read
