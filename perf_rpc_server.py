@@ -10,7 +10,9 @@ from rpc_thrift.utils import get_service_protocol
 
 
 class TypoProcessor(Iface):
-    pass
+    def ping(self):
+        # print "Receive Ping Msg"
+        pass
 
 TEST_SOCKET="test_0001.sock"
 
@@ -41,16 +43,16 @@ def client_test(server):
     client = Client(protocol)
 
     print "Begin Request"
-    t = time.time()
-    total_times = 10000
-    for i in xrange(total_times):
-        client.ping()
-    t = time.time() - t
-    print "AVG RT: %.3fms" % (t * 1000 / total_times)
+    try:
+        t = time.time()
+        total_times = 10000
+        for i in xrange(total_times):
+            client.ping()
+        t = time.time() - t
+        print "AVG RT: %.3fms" % (t * 1000 / total_times)
+    finally:
+        server.stop()
 
-    server.stop()
-
-    exit(0)
 
 if __name__ == "__main__":
 

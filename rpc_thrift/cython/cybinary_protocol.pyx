@@ -18,26 +18,7 @@ DEF VERSION_MASK = -65536
 DEF VERSION_1 = -2147418112
 DEF TYPE_MASK = 0x000000ff
 
-ctypedef enum TType:
-    T_STOP = 0,
-    T_VOID = 1,
-    T_BOOL = 2,
-    T_BYTE = 3,
-    T_I08 = 3,
-    T_I16 = 6,
-    T_I32 = 8,
-    T_U64 = 9,
-    T_I64 = 10,
-    T_DOUBLE = 4,
-    T_STRING = 11,
-    T_UTF7 = 11,
-    T_NARY = 11
-    T_STRUCT = 12,
-    T_MAP = 13,
-    T_SET = 14,
-    T_LIST = 15,
-    T_UTF8 = 16,
-    T_UTF16 = 17
+
 
 class ProtocolError(Exception):
     pass
@@ -421,11 +402,6 @@ def write_val(CyTransportBase buf, TType ttype, val, spec=None):
 
 
 cdef class TCyBinaryProtocol(object):
-    cdef public CyTransportBase trans
-    cdef public bool strict_read
-    cdef public bool strict_write
-    cdef public str  service
-
     def __init__(self, trans, strict_read=True, strict_write=True, service=None):
         self.trans = trans
         self.strict_read = strict_read
@@ -435,7 +411,7 @@ cdef class TCyBinaryProtocol(object):
     def skip(self, ttype):
         skip(self.trans, <TType>(ttype))
 
-    def readMessageBegin(self):
+    cpdef readMessageBegin(self):
         cdef int32_t size, version, seqid
         cdef TType ttype
 
@@ -461,7 +437,7 @@ cdef class TCyBinaryProtocol(object):
     def readMessageEnd(self):
         pass
 
-    def writeMessageBegin(self, name, TType ttype, int32_t seqid):
+    cpdef writeMessageBegin(self, name, TType ttype, int32_t seqid):
         cdef int32_t version = VERSION_1 | ttype
 
         if self.strict_write:

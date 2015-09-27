@@ -13,21 +13,25 @@ from setuptools.extension import Extension
 requirements = [
     'gevent>=1.0',
     'thrift==0.9.2',
-    'colorama>=0.3.3'
+    'colorama>=0.3.3',
+    "Cython==0.23.2"
 ]
 if sys.version_info < (2, 7):
     requirements.append('argparse')
 
 from distutils.core import setup
-from Cython.Build import cythonize
 from Cython.Distutils import build_ext
 
 ext_modules = []
-# cythonize("rpc_thrift/cython/*.pyx")
-
 files = ["cybase", "cybinary_protocol", "cyframed_transport", "cymemory_transport"]
 for f in files:
-    ext_modules.append(Extension("rpc_thrift.cython.%s" % f, ["rpc_thrift/cython/cymemory_transport.pxd", "rpc_thrift/cython/cybase.pxd", "rpc_thrift/cython/%s.pyx" % f]))
+    ext_modules.append(Extension("rpc_thrift.cython.%s" % f, ["rpc_thrift/cython/cyframed_transport.pxd",
+                                                              "rpc_thrift/cython/cybinary_protocol.pxd",
+                                                              "rpc_thrift/cython/cymemory_transport.pxd",
+                                                              "rpc_thrift/cython/cybase.pxd",
+                                                              "rpc_thrift/cython/%s.pyx" % f]))
+
+# ext_modules.append(Extension("rpc_thrift.server", ["rpc_thrift/server.pyx"]))
 
 setup(
     name='rpc_proxy',

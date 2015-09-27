@@ -24,9 +24,6 @@ cdef extern from "./endian_port.h":
 
 
 cdef class TCyFramedTransport(CyTransportBase):
-    cdef:
-        object trans
-        TCyBuffer rbuf, rframe_buf, wframe_buf
 
     def __init__(self, trans, int buf_size=DEFAULT_BUFFER):
         self.trans = trans # Python对象
@@ -97,7 +94,7 @@ cdef class TCyFramedTransport(CyTransportBase):
                 free(dy_frame)
 
 
-    cdef _read_frame(self):
+    cpdef read_frame(self):
         # 如何读取一帧数据，并且以 TCyMemoryBuffer 形式返回
         cdef:
             char frame_len[4]
@@ -176,8 +173,6 @@ cdef class TCyFramedTransport(CyTransportBase):
         cdef int sz = len(data)
         self.c_write(data, sz)
 
-    def read_frame(self):
-        return self._read_frame()
 
     def flush(self):
         try:
