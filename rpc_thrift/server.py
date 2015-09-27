@@ -54,10 +54,11 @@ class RpcServer(object):
 
         self.service = service
         self.queue = None
-        self.socket = None
         self.last_request_time = 0
 
         self.out_protocols = collections.deque()
+        self.alive = True
+        self.socket = None
 
     def handle_request(self, proto_input, queue, request_meta):
         """
@@ -106,6 +107,8 @@ class RpcServer(object):
         socket = TServerSocket(host=self.host, port=self.port, unix_socket=self.unix_socket)
         socket.open()
         socket.listen()
+
+        self.socket = socket
 
         while self.alive:
             tsocket = socket.accept()
@@ -252,6 +255,10 @@ class RpcServer(object):
         if self.acceptor_task is not None:
             self.acceptor_task.kill()
             self.acceptor_task = None
+
+        if self.socket:
+            self.socket.close()
+            self.socket = None
 
     def init_signal(self):
         def handle_term(*_):
