@@ -5,7 +5,7 @@ import time
 
 from rpc_thrift.server import RpcServer, gevent
 from rpc_thrift.services.RpcServiceBase import Iface, Processor, Client
-from rpc_thrift.utils import get_base_protocol
+from rpc_thrift.utils import get_base_protocol, get_fast_transport
 from rpc_thrift.utils import get_service_protocol
 
 
@@ -38,8 +38,13 @@ def client_test(server):
     gevent.sleep(1)
     service = ""
     endpoint = TEST_SOCKET
-    get_base_protocol(endpoint, timeout=5000)
-    protocol = get_service_protocol(service, fastbinary=FAST_BINARY)
+
+    if FAST_BINARY:
+        get_fast_transport(endpoint, timeout=5000)
+        protocol = get_service_protocol(service, fast=FAST_BINARY)
+    else:
+        get_base_protocol(endpoint, timeout=5000)
+        protocol = get_service_protocol(service, fast=FAST_BINARY)
     client = Client(protocol)
 
     print "Begin Request"

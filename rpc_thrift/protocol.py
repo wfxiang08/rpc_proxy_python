@@ -21,7 +21,6 @@ class TUtf8BinaryProtocol(TBinaryProtocol):
             self.service_name_ = service_name + SEPARATOR
         else:
             self.service_name_ = None
-        self.fastbinary = fastbinary
         self.logger = logger
         self.last_name = None
         self.start = None
