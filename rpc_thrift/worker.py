@@ -7,7 +7,6 @@ import os
 import signal
 import time
 import traceback
-from struct import unpack
 
 from colorama import Fore
 import gevent.pool
@@ -15,15 +14,17 @@ import gevent.queue
 import gevent.event
 import gevent.local
 import gevent.lock
+from rpc_thrift.cython.cybinary_protocol import TCyBinaryProtocol
+from rpc_thrift.cython.cyframed_transport import TCyFramedTransport
 from thrift.Thrift import TApplicationException, TMessageType
+from thrift.transport.TSocket import TSocket
 from thrift.transport.TTransport import TTransportException
+
+from rpc_thrift.cython.cymemory_transport import TCyMemoryBuffer
 
 from rpc_thrift import MESSAGE_TYPE_HEART_BEAT
 from rpc_thrift.config import print_exception
 from rpc_thrift.heartbeat import new_rpc_exit_message
-from rpc_thrift.protocol import TUtf8BinaryProtocol
-from rpc_thrift.transport import TMemoryBuffer, TRBuffSocket
-
 
 info_logger = logging.getLogger('info_logger')
 
@@ -72,16 +73,15 @@ class RpcWorker(object):
             trans_output, proto_output = self.out_protocols.popleft()
             trans_output.prepare_4_frame() # 预留4个字节的Frame Size
         else:
-            trans_output = TMemoryBuffer()
-            trans_output.prepare_4_frame(True)
-            proto_output = TUtf8BinaryProtocol(trans_output, fastbinary=self.fastbinary) # 无状态的
+            trans_output = TCyMemoryBuffer()
+            trans_output.prepare_4_frame()
+            proto_output = TCyBinaryProtocol(trans_output) # 无状态的
 
 
         try:
             # 2.1 处理正常的请求
             self.processor.process(proto_input, proto_output)
-            msg = trans_output.getvalue()
-            queue.put(msg)
+            queue.put(trans_output)
 
         except Exception as e:
             # 2.2 处理异常(主要是结果序列化时参数类型不对的情况)
@@ -97,7 +97,7 @@ class RpcWorker(object):
             proto_output.writeMessageEnd()
 
             proto_output.trans.flush()
-            queue.put(trans_output.getvalue())
+            queue.put(trans_output)
 
         finally:
             # 3. 回收 transport 和 protocol
@@ -117,7 +117,7 @@ class RpcWorker(object):
             info_logger.info("Prepare open a socket to lb: %s:%s", self.host, self.port)
 
         # 1. 创建一个到lb的连接，然后开始读取Frame, 并且返回数据
-        socket = TRBuffSocket(host=self.host, port=self.port, unix_socket=self.unix_socket)
+        socket = TSocket(host=self.host, port=self.port, unix_socket=self.unix_socket)
 
         try:
             if not socket.isOpen():
@@ -143,8 +143,9 @@ class RpcWorker(object):
 
 
         # 3. 在同一个transport上进行读写数据
-        g1 = gevent.spawn(self.loop_reader, socket, self.queue)
-        g2 = gevent.spawn(self.loop_writer, socket, self.queue)
+        transport = TCyFramedTransport(socket)
+        g1 = gevent.spawn(self.loop_reader, transport, self.queue)
+        g2 = gevent.spawn(self.loop_writer, transport, self.queue)
         gevent.joinall([g1, g2])
 
 
@@ -159,7 +160,7 @@ class RpcWorker(object):
             pass
 
 
-    def loop_reader(self, socket, queue):
+    def loop_reader(self, transport, queue):
         """
         :param tsocket:
         :param queue:
@@ -171,34 +172,30 @@ class RpcWorker(object):
         :return:
         """
         last_hb_time = time.time()
+        # transport = TCyFramedTransport(None)
 
         while True:
             try:
                 # 1. 读取一帧数据
-                buff = socket.readAll(4)
-                sz, = unpack('!i', buff)
+                trans_input = transport.read_frame() # TCyMemoryBuffer
 
-                # 将frame size和frame一口气读完, 便于处理"心跳"
-                socket.unread(4)
-                frame = self.socket.readAll(4 + sz)
-
-
-                trans_input = TMemoryBuffer(frame)
-                proto_input = TUtf8BinaryProtocol(trans_input, fastbinary=self.fastbinary)
+                trans_input.reset_frame() # 跳过Frame Size
+                proto_input = TCyBinaryProtocol(trans_input)
 
                 name, type, seqid = proto_input.readMessageBegin()
 
 
                 # 如果是心跳，则直接返回
                 if type == MESSAGE_TYPE_HEART_BEAT:
-                    queue.put(frame)
+                    trans_input.reset()
+                    queue.put(trans_input)
                     last_hb_time = time.time()
                     # print "Received Heartbeat Signal........"
                     continue
 
                 else:
                     self.last_request_time = time.time()
-                    trans_input.reset()
+                    trans_input.reset_frame()
                     self.task_pool.spawn(self.handle_request, proto_input, queue, (name, type, seqid))
             except TTransportException as e:
                 # EOF是很正常的现象
@@ -213,7 +210,7 @@ class RpcWorker(object):
                 break
 
 
-    def loop_writer(self, socket, queue):
+    def loop_writer(self, transport, queue):
         """
         异步写入数据
         :param trans:
@@ -224,8 +221,8 @@ class RpcWorker(object):
         while msg is not None:
             try:
                 # print "====> ", msg
-                socket.write(msg)
-                socket.flush()
+                transport.flush_frame_buff(msg)
+                # transport.flush()
             except:
                 print_exception(info_logger)
                 break

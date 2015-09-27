@@ -25,6 +25,19 @@ cdef class TCyBuffer(object):
         self.cur = 0
         self.data_size = 0
 
+    cdef void reset(self):
+        self.data_size += self.cur
+        self.cur = 0
+
+    cdef void skip_bytes(self, sz):
+        if self.data_size >= sz:
+            self.cur += sz
+            self.data_size -= sz
+
+    # cdef get_value(self):
+    #     # 直接返回buffer中的所有的数据
+    #     return self.buf[0:(self.data_size + self.cur)]
+
     cdef int write(self, int sz, const char *value):
         cdef:
             int cap = self.buf_size - self.data_size

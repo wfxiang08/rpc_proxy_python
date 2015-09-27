@@ -1,11 +1,15 @@
 from libc.string cimport memcpy
 from libc.stdlib cimport malloc, free
+from libc.stdint cimport int32_t
 from rpc_thrift.cython.cybase cimport (
     TCyBuffer,
     CyTransportBase,
     DEFAULT_BUFFER,
 )
 
+cdef extern from "./endian_port.h":
+    int32_t be32toh(int32_t n)
+    int32_t htobe32(int32_t n)
 
 def to_bytes(s):
     try:
@@ -15,13 +19,29 @@ def to_bytes(s):
 
 # 基于内存的Buffer Transport
 cdef class TCyMemoryBuffer(CyTransportBase):
-    cdef TCyBuffer buf
+
 
     def __init__(self, value=b'', int buf_size=DEFAULT_BUFFER):
         self.buf = TCyBuffer(buf_size)
 
         if value:
             self.setvalue(value)
+
+    def reset(self):
+        self.buf.reset()
+
+    def prepare_4_frame(self):
+        self.clean()
+        self.buf.write(4, "1234")
+
+
+
+
+    def get_frame_value(self):
+        size = htobe32(self.buf.data_size - 4)
+        memcpy(self.buf.buf, &size, 4)
+        return self.buf.buf[:self.buf.data_size]
+
 
     cdef c_read(self, int sz, char* out):
         # 限制读取的参数
@@ -38,11 +58,13 @@ cdef class TCyMemoryBuffer(CyTransportBase):
         return sz
 
     cdef c_write(self, const char* data, int sz):
+        # print "c_write: ", data[:sz]
         cdef int r = self.buf.write(sz, data)
         if r == -1:
             raise MemoryError("Write to memory error")
 
     cdef _getvalue(self):
+        # 读取“剩下”的可读的数据
         cdef char *out
         cdef int size = self.buf.data_size
 
@@ -60,6 +82,11 @@ cdef class TCyMemoryBuffer(CyTransportBase):
         self.buf.clean()
         self.buf.write(sz, value)
 
+    def reset_frame(self):
+        # 回到Frame的开始位置
+        self.buf.reset()
+        self.buf.skip_bytes(4)
+
     # Transport主要解决读和写的问题
     def read(self, sz):
         return self.get_string(sz)
@@ -70,7 +97,7 @@ cdef class TCyMemoryBuffer(CyTransportBase):
         cdef int sz = len(data)
         return self.c_write(data, sz)
 
-    def is_open(self):
+    def isOpen(self):
         return True
 
     def open(self):

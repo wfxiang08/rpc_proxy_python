@@ -11,7 +11,11 @@ from rpc_thrift.cython.cybase cimport (
     STACK_STRING_LEN
 )
 
+cimport rpc_thrift.cython.cymemory_transport
+from rpc_thrift.cython.cymemory_transport cimport TCyMemoryBuffer
+
 from thrift.transport.TTransport import TTransportException
+# from rpc_thrift.cython.cymemory_transport import TCyMemoryBuffer
 
 
 cdef extern from "./endian_port.h":
@@ -26,9 +30,14 @@ cdef class TCyFramedTransport(CyTransportBase):
 
     def __init__(self, trans, int buf_size=DEFAULT_BUFFER):
         self.trans = trans # Python对象
+
+        # 负责和transport进行读的buffer操作
         self.rbuf = TCyBuffer(buf_size)
+
+        # 负责对Client的Frame的读写操作
         self.rframe_buf = TCyBuffer(buf_size)
         self.wframe_buf = TCyBuffer(buf_size)
+        self.wframe_buf.write(4, "1234") # 占位
 
     cdef read_trans(self, int sz, char *out):
         cdef int i = self.rbuf.read_trans(self.trans, sz, out)
@@ -48,7 +57,7 @@ cdef class TCyFramedTransport(CyTransportBase):
             return 0
 
         while self.rframe_buf.data_size < sz:
-            self.read_frame()
+            self._read_frame_internal()
 
         memcpy(out, self.rframe_buf.buf + self.rframe_buf.cur, sz)
         self.rframe_buf.cur += sz
@@ -61,7 +70,7 @@ cdef class TCyFramedTransport(CyTransportBase):
         if r == -1:
             raise MemoryError("Write to buffer error")
 
-    cdef read_frame(self):
+    cdef _read_frame_internal(self):
         cdef:
             char frame_len[4]
             char stack_frame[STACK_STRING_LEN]
@@ -87,32 +96,103 @@ cdef class TCyFramedTransport(CyTransportBase):
             finally:
                 free(dy_frame)
 
+
+    cdef _read_frame(self):
+        # 如何读取一帧数据，并且以 TCyMemoryBuffer 形式返回
+        cdef:
+            char frame_len[4]
+            int32_t frame_size
+            TCyMemoryBuffer buff
+
+        # 读取一个新的frame_size
+        self.read_trans(4, frame_len)
+        frame_size = be32toh((<int32_t*>frame_len)[0])
+
+        if frame_size <= 0:
+            raise TTransportException("No frame.", TTransportException.UNKNOWN)
+
+        buffer = TCyMemoryBuffer(buf_size=4 + frame_size)
+        buffer.c_write(frame_len, 4)
+        self.read_trans(frame_size, buffer.buf.buf + 4)
+        buffer.buf.data_size = 4 + frame_size
+
+        return buffer
+
+
+
     cdef c_flush(self):
         cdef:
             bytes data
             char *size_str
+            int32_t size
 
-        if self.wframe_buf.data_size > 0:
+        if self.wframe_buf.data_size > 4:
+
+            size = htobe32(self.wframe_buf.data_size - 4)
+            memcpy(self.wframe_buf.buf, &size, 4)
+
             data = self.wframe_buf.buf[:self.wframe_buf.data_size]
-            size = htobe32(self.wframe_buf.data_size)
-            size_str = <char*>(&size)
 
-            self.trans.write(size_str[:4] + data)
+            # size_str = <char*>(&size)
+            self.trans.write(data)
             self.trans.flush()
+
             self.wframe_buf.clean()
+            self.wframe_buf.write(4, "1234") # 占位
+
+
+    cdef _flush_frame_buff(self, buff1):
+        cdef:
+            TCyMemoryBuffer buff
+        try:
+
+            buff = buff1
+            if not self.isOpen():
+                self.open()
+
+            frame = buff.get_frame_value()
+
+            self.trans.write(frame)
+            self.trans.flush()
+        except:
+            # 如果遇到异常，则关闭transaction
+            self.close()
+            self.clean()
+            raise
+
+    def flush_frame_buff(self, buf):
+        self._flush_frame_buff(buf)
 
     def read(self, int sz):
-        return self.get_string(sz)
+        try:
+            return self.get_string(sz)
+        except:
+            # 如果遇到异常，则关闭transaction
+            self.close()
+            self.clean()
+            raise
 
     def write(self, bytes data):
         cdef int sz = len(data)
         self.c_write(data, sz)
 
-    def flush(self):
-        self.c_flush()
+    def read_frame(self):
+        return self._read_frame()
 
-    def is_open(self):
-        return self.trans.is_open()
+    def flush(self):
+        try:
+            if not self.isOpen():
+                self.open()
+
+            self.c_flush()
+        except:
+            # 如果遇到异常，则关闭transaction
+            self.close()
+            self.clean()
+            raise
+
+    def isOpen(self):
+        return self.trans.isOpen()
 
     def open(self):
         return self.trans.open()
@@ -123,7 +203,9 @@ cdef class TCyFramedTransport(CyTransportBase):
     def clean(self):
         self.rbuf.clean()
         self.rframe_buf.clean()
+
         self.wframe_buf.clean()
+        self.wframe_buf.write(4, "1234") # 占位
 
 
 class TCyFramedTransportFactory(object):

@@ -75,6 +75,7 @@ class Client(Iface):
     self.recv_ping1()
 
   def send_ping1(self):
+    # 手动修改
     self._oprot.writeMessageBegin('ping', 20, self._seqid)
     args = ping1_args()
     args.write(self._oprot)

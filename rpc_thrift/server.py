@@ -7,7 +7,6 @@ import os
 import signal
 import time
 import traceback
-from struct import unpack
 
 from colorama import Fore
 import gevent.pool
@@ -15,28 +14,22 @@ import gevent.queue
 import gevent.event
 import gevent.local
 import gevent.lock
+from rpc_thrift.cython.cybinary_protocol import TCyBinaryProtocol
+from rpc_thrift.cython.cyframed_transport import TCyFramedTransport
 from thrift.Thrift import TApplicationException, TMessageType
 from thrift.transport.TSocket import TServerSocket
 from thrift.transport.TTransport import TTransportException
+from rpc_thrift.cython.cymemory_transport import TCyMemoryBuffer
 
 from rpc_thrift import MESSAGE_TYPE_HEART_BEAT
 from rpc_thrift.config import print_exception
 from rpc_thrift.heartbeat import new_rpc_exit_message
-from rpc_thrift.protocol import TUtf8BinaryProtocol
-from rpc_thrift.transport import TMemoryBuffer, TRBuffSocket
-
 
 info_logger = logging.getLogger('info_logger')
 
-class TServerSocketEx(TServerSocket):
-  def accept(self):
-        client, addr = self.handle.accept()
-        result = TRBuffSocket()
-        result.setHandle(client)
-        return result
 
 class RpcServer(object):
-    def __init__(self, processor, address, pool_size=5, service=None, fastbinary=False):
+    def __init__(self, processor, address, pool_size=1, service=None):
         self.processor = processor
 
         if address.find(":") != -1:
@@ -49,7 +42,6 @@ class RpcServer(object):
             self.port = None
             self.unix_socket = address
 
-        self.fastbinary = fastbinary
         # 4. gevent
         self.task_pool = gevent.pool.Pool(size=pool_size)
         self.acceptor_task = None
@@ -62,16 +54,10 @@ class RpcServer(object):
 
         self.service = service
         self.queue = None
+        self.socket = None
         self.last_request_time = 0
 
         self.out_protocols = collections.deque()
-        self.alive = True
-        self.socket = None
-
-    def close(self):
-        self.alive = False
-        if self.socket:
-            self.socket.close()
 
     def handle_request(self, proto_input, queue, request_meta):
         """
@@ -85,16 +71,15 @@ class RpcServer(object):
             trans_output, proto_output = self.out_protocols.popleft()
             trans_output.prepare_4_frame() # 预留4个字节的Frame Size
         else:
-            trans_output = TMemoryBuffer()
-            trans_output.prepare_4_frame(True)
-            proto_output = TUtf8BinaryProtocol(trans_output) # 无状态的
+            trans_output = TCyMemoryBuffer()
+            trans_output.prepare_4_frame()
+            proto_output = TCyBinaryProtocol(trans_output) # 无状态的
 
 
         try:
             # 2.1 处理正常的请求
             self.processor.process(proto_input, proto_output)
-            msg = trans_output.getvalue()
-            queue.put(msg)
+            queue.put(trans_output)
 
         except Exception as e:
             # 2.2 处理异常(主要是结果序列化时参数类型不对的情况)
@@ -108,9 +93,9 @@ class RpcServer(object):
             proto_output.writeMessageBegin(name, TMessageType.EXCEPTION, seqId)
             x.write(proto_output)
             proto_output.writeMessageEnd()
-            proto_output.trans.flush()
 
-            queue.put(trans_output.getvalue())
+            proto_output.trans.flush()
+            queue.put(trans_output)
 
         finally:
             # 3. 回收 transport 和 protocol
@@ -118,20 +103,24 @@ class RpcServer(object):
 
 
     def loop_all(self):
-        socket = TServerSocketEx(host=self.host, port=self.port, unix_socket=self.unix_socket)
+        socket = TServerSocket(host=self.host, port=self.port, unix_socket=self.unix_socket)
         socket.open()
         socket.listen()
 
         while self.alive:
             tsocket = socket.accept()
+            tsocket.setTimeout(5000)
             print "Get A Connection: ", tsocket
 
             # 如果出现None, 则表示要结束了
             queue = gevent.queue.Queue()
 
+
+            transport = TCyFramedTransport(tsocket)
+
             # 3. 在同一个transport上进行读写数据
-            g1 = gevent.spawn(self.loop_reader, tsocket, queue)
-            g2 = gevent.spawn(self.loop_writer, tsocket, queue)
+            g1 = gevent.spawn(self.loop_reader, transport, queue)
+            g2 = gevent.spawn(self.loop_writer, transport, queue)
             gevent.joinall([g1, g2])
 
 
@@ -144,7 +133,7 @@ class RpcServer(object):
                 pass
 
 
-    def loop_reader(self, socket, queue):
+    def loop_reader(self, transport, queue):
         """
         :param tsocket:
         :param queue:
@@ -156,32 +145,30 @@ class RpcServer(object):
         :return:
         """
         last_hb_time = time.time()
+        # transport = TCyFramedTransport(None)
 
         while True:
             try:
                 # 1. 读取一帧数据
-                buff = socket.readAll(4)
-                sz, = unpack('!i', buff)
+                trans_input = transport.read_frame() # TCyMemoryBuffer
 
-                # 将frame size和frame一口气读完, 便于处理"心跳"
-                socket.unread(4)
-                frame = socket.readAll(4 + sz)
+                trans_input.reset_frame() # 跳过Frame Size
+                proto_input = TCyBinaryProtocol(trans_input)
 
-                trans_input = TMemoryBuffer(frame)
-                proto_input = TUtf8BinaryProtocol(trans_input, fastbinary=self.fastbinary)
                 name, type, seqid = proto_input.readMessageBegin()
 
 
                 # 如果是心跳，则直接返回
                 if type == MESSAGE_TYPE_HEART_BEAT:
-                    queue.put(frame)
+                    trans_input.reset()
+                    queue.put(trans_input)
                     last_hb_time = time.time()
                     # print "Received Heartbeat Signal........"
                     continue
 
                 else:
                     self.last_request_time = time.time()
-                    trans_input.reset()
+                    trans_input.reset_frame()
                     self.task_pool.spawn(self.handle_request, proto_input, queue, (name, type, seqid))
             except TTransportException as e:
                 # EOF是很正常的现象
@@ -196,7 +183,7 @@ class RpcServer(object):
                 break
 
 
-    def loop_writer(self, socket, queue):
+    def loop_writer(self, transport, queue):
         """
         异步写入数据
         :param trans:
@@ -207,8 +194,8 @@ class RpcServer(object):
         while msg is not None:
             try:
                 # print "====> ", msg
-                socket.write(msg)
-                socket.flush()
+                transport.flush_frame_buff(msg)
+                # transport.flush()
             except:
                 print_exception(info_logger)
                 break
