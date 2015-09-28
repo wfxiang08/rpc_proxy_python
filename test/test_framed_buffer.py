@@ -1,20 +1,14 @@
 # -*- coding:utf-8 -*-
 from __future__ import  absolute_import
 
-import time
-
-from thrift.protocol.TBinaryProtocol import TBinaryProtocol
-
-from rpc_thrift.cython.cybinary_protocol import TCyBinaryProtocol
 from rpc_thrift.cython.cymemory_transport import TCyMemoryBuffer
 from rpc_thrift.cython.cyframed_transport import TCyFramedTransport
-from rpc_thrift.protocol import TUtf8BinaryProtocol
+
 from rpc_thrift.transport import TMemoryBuffer
 
+
 # 这个相对路径如何处理呢?
-from rpc_thrift.services.ttypes import RpcException
 from unittest import TestCase
-from demo.ttypes import Location, Locations
 
 
 class FramedBufferTest(TestCase):

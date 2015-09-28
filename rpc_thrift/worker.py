@@ -58,7 +58,7 @@ class RpcWorker(object):
         self.queue = None
         self.socket = None
         self.last_request_time = 0
-
+        self.last_hb_time = 0
         self.out_protocols = collections.deque()
 
     def handle_request(self, proto_input, queue, request_meta):
@@ -146,7 +146,8 @@ class RpcWorker(object):
         transport = TCyFramedTransport(socket)
         g1 = gevent.spawn(self.loop_reader, transport, self.queue)
         g2 = gevent.spawn(self.loop_writer, transport, self.queue)
-        gevent.joinall([g1, g2])
+        g3 = gevent.spawn(self.loop_hb_detect, transport)
+        gevent.joinall([g1, g2, g3])
 
 
         # 4. 关闭连接
@@ -160,6 +161,16 @@ class RpcWorker(object):
             pass
 
 
+    def loop_hb_detect(self, transport):
+        self.last_hb_time = time.time()
+        while transport.isOpen():
+            # 如果5s内没有心跳，则关闭当前的transport
+            if time.time() - self.last_hb_time > 5:
+                transport.close()
+                break
+            else:
+                gevent.sleep(2)
+
     def loop_reader(self, transport, queue):
         """
         :param tsocket:
@@ -171,13 +182,12 @@ class RpcWorker(object):
         :param queue:
         :return:
         """
-        last_hb_time = time.time()
         # transport = TCyFramedTransport(None)
 
         while True:
             try:
                 # 1. 读取一帧数据
-                trans_input = transport.read_frame() # TCyMemoryBuffer
+                trans_input = transport.read_frame() # TCyMemoryBuffer, 有可能一直堵在这里, 通过 loop_hb_detect.close()来终止
 
                 trans_input.reset_frame() # 跳过Frame Size
                 proto_input = TCyBinaryProtocol(trans_input)
@@ -189,7 +199,7 @@ class RpcWorker(object):
                 if type == MESSAGE_TYPE_HEART_BEAT:
                     trans_input.reset()
                     queue.put(trans_input)
-                    last_hb_time = time.time()
+                    self.last_hb_time = time.time()
                     # print "Received Heartbeat Signal........"
                     continue
 
