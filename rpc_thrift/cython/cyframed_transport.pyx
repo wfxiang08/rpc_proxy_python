@@ -116,7 +116,8 @@ cdef class TCyFramedTransport(CyTransportBase):
 
         return buffer
 
-
+    def flush(self):
+        self.c_flush()
 
     cdef c_flush(self):
         cdef:
@@ -124,19 +125,29 @@ cdef class TCyFramedTransport(CyTransportBase):
             char *size_str
             int32_t size
 
+        # self.wframe_buf.cur 似乎只有在读操作中才会改变，其他情况下不变，默认为0
+
         if self.wframe_buf.data_size > 4:
 
-            size = htobe32(self.wframe_buf.data_size - 4)
-            memcpy(self.wframe_buf.buf, &size, 4)
+            try:
+                if not self.isOpen():
+                    self.open()
+                size = htobe32(self.wframe_buf.data_size - 4)
+                memcpy(self.wframe_buf.buf, &size, 4)
 
-            data = self.wframe_buf.buf[:self.wframe_buf.data_size]
+                data = self.wframe_buf.buf[0:self.wframe_buf.data_size]
 
-            # size_str = <char*>(&size)
-            self.trans.write(data)
-            self.trans.flush()
+                # size_str = <char*>(&size)
+                self.trans.write(data)
+                self.trans.flush()
 
-            self.wframe_buf.clean()
-            self.wframe_buf.write(4, "1234") # 占位
+                self.wframe_buf.clean()
+                self.wframe_buf.write(4, "1234") # 占位
+            except:
+                # 如果遇到异常，则关闭transaction
+                self.close()
+                self.clean()
+                raise
 
 
     cdef _flush_frame_buff(self, buff1):
@@ -175,17 +186,7 @@ cdef class TCyFramedTransport(CyTransportBase):
         self.c_write(data, sz)
 
 
-    def flush(self):
-        try:
-            if not self.isOpen():
-                self.open()
 
-            self.c_flush()
-        except:
-            # 如果遇到异常，则关闭transaction
-            self.close()
-            self.clean()
-            raise
 
     def isOpen(self):
         return self.trans.isOpen()

@@ -486,7 +486,10 @@ cdef class TCyBinaryProtocol(object):
         write_i32(self.trans, seqid)
 
     def writeMessageEnd(self):
+        # 在writeMessageEnd时，不应该调用c_flush，c_flush没有自己的异常处理
+        # TODO:
         self.trans.c_flush()
+
 
     def read_struct(self, obj):
         try:

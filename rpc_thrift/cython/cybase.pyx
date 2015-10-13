@@ -46,13 +46,13 @@ cdef class TCyBuffer(object):
 
     cdef int write(self, int sz, const char *value):
         cdef:
-            int cap = self.buf_size - self.data_size # 还可以继续写的内存
-            int remain = cap - self.cur
+            int cap = self.buf_size - self.data_size # 空闲的内存
+            int remain = cap - self.cur # 现有数据后，可以写的内存
 
         if sz <= 0:
             return 0
 
-        if remain < sz:
+        if remain < sz: # 整理内存(尽量lazy处理)
             self.move_to_start()
 
         # recompute remain spaces
