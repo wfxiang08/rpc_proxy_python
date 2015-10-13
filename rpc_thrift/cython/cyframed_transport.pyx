@@ -131,7 +131,7 @@ cdef class TCyFramedTransport(CyTransportBase):
         # self.wframe_buf.cur 似乎只有在读操作中才会改变，其他情况下不变，默认为0
 
         if self.wframe_buf.data_size > 4:
-
+            # 只有存在有效的数据，才flush; 防止重复调用
             try:
                 if not self.isOpen():
                     self.open()
