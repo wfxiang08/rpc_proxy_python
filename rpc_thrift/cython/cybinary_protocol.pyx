@@ -487,7 +487,7 @@ cdef class TCyBinaryProtocol(object):
 
     def writeMessageEnd(self):
         # 在writeMessageEnd时，不应该调用c_flush，c_flush没有自己的异常处理
-        # TODO:
+        # 为了保险，暂时保留; c_flush和flush等价，并且具备异常处理功能
         self.trans.c_flush()
 
 
