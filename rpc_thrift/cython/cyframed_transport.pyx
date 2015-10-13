@@ -117,6 +117,9 @@ cdef class TCyFramedTransport(CyTransportBase):
         return buffer
 
     def flush(self):
+        """
+            flush和c_flush等价，并且多次重复调用没有副作用
+        """
         self.c_flush()
 
     cdef c_flush(self):
