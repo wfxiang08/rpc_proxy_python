@@ -33,7 +33,7 @@ for f in files:
 
 setup(
     name='rpc_proxy',
-    version="2.0.0",
+    version="2.0.1",
     description='rpc_proxy is a flexible RPC based on thrift.',
     author="wangfei",
     author_email="wangfei@chunyu.me",
