@@ -33,6 +33,7 @@ cdef class TCyFramedTransport(CyTransportBase):
 
         # 负责对Client的Frame的读写操作
         self.rframe_buf = TCyBuffer(buf_size)
+
         self.wframe_buf = TCyBuffer(buf_size)
         self.wframe_buf.write(4, "1234") # 占位
 

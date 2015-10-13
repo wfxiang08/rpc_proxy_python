@@ -6,10 +6,12 @@ from libc.string cimport memcpy, memmove
 # 自己实现的Buffer, 不使用: cStringIO
 cdef class TCyBuffer(object):
     def __cinit__(self, buf_size):
+
         self.buf = <char*>malloc(buf_size)
         self.buf_size = buf_size
+
         self.cur = 0
-        self.data_size = 0
+        self.data_size = 0 # 可以继续读取的byte数
 
     def __dealloc__(self):
         if self.buf != NULL:
@@ -22,10 +24,14 @@ cdef class TCyBuffer(object):
 
     cdef void clean(self):
         # 底层的数据不变，但是状态reset
+        # buf, buf_size不变
         self.cur = 0
         self.data_size = 0
 
     cdef void reset(self):
+        '''
+        在读取数据时，cur设置到最开始的位置0
+        '''
         self.data_size += self.cur
         self.cur = 0
 
@@ -40,7 +46,7 @@ cdef class TCyBuffer(object):
 
     cdef int write(self, int sz, const char *value):
         cdef:
-            int cap = self.buf_size - self.data_size
+            int cap = self.buf_size - self.data_size # 还可以继续写的内存
             int remain = cap - self.cur
 
         if sz <= 0:
@@ -53,6 +59,7 @@ cdef class TCyBuffer(object):
         remain = cap - self.cur
 
         if remain < sz:
+            # sz - remain + self.buf_size 新的size的需求
             if self.grow(sz - remain + self.buf_size) != 0:
                 return -1
 

@@ -409,6 +409,9 @@ def write_val(CyTransportBase buf, TType ttype, val, spec=None):
 
 
 cdef class TCyBinaryProtocol(object):
+    '''
+        TCyBinaryProtocol 只负责数据的序列化，不考虑Cache
+    '''
     cdef:
         public CyTransportBase trans
         bool strict_read
