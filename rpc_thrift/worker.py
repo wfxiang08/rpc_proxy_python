@@ -263,13 +263,15 @@ class RpcWorker(object):
                 exit(0)
             else:
                 info_logger.warning("[%s]Waiting Exit of Worker, %.2fs", self.service, now - start)
-                time.sleep(1)
+                # time.sleep(1)
+                gevent.sleep(1)
 
 
     def run(self):
         import gevent.monkey
 
-        gevent.monkey.patch_socket()
+        # gevent.monkey.patch_socket()
+        gevent.monkey.patch_all()
 
         # 0. 注册信号(控制运维)
         self.init_signal()
