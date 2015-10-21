@@ -193,7 +193,7 @@ cdef inline write_struct(CyTransportBase buf, obj):
 
     # writeStructBegin 空操作
     for field_spec in thrift_spec:
-        # thrift_spec[0] 为 None，可能为占位符号
+        # thrift_spec[0] 为 None，也可能非 None, 它表示函数的返回结果；如果返回值为void, 则类型为None
         if field_spec is None:
             continue
 
