@@ -55,7 +55,13 @@ cdef class TCyFramedTransport(CyTransportBase):
             return 0
 
         while self.rframe_buf.data_size < sz:
-            self._read_frame_internal()
+            try:
+                # 在读取Frame的过程中如果遇到timeout, 那么需要关闭Connection, 然后重新打开
+                self._read_frame_internal()
+            except:
+                self.close()
+                self.clean()
+                raise
 
         memcpy(out, self.rframe_buf.buf + self.rframe_buf.cur, sz)
         self.rframe_buf.cur += sz
