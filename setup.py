@@ -12,7 +12,7 @@ from setuptools.extension import Extension
 
 requirements = [
     'gevent>=1.0',
-    'thrift==0.9.2',
+    'thrift==0.9.9',
     'colorama>=0.3.3',
     "Cython==0.23.2"
 ]
