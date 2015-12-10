@@ -132,6 +132,10 @@ cdef class TCyBuffer(object):
 
 # C实现的Transport的基本接口
 cdef class CyTransportBase(object):
+    #
+    # CyFramedTransport 如何是实现呢?
+    # 大部分情况下读取Buffer, 没有数据再从Transport读取数据
+    #
     cdef c_read(self, int sz, char* out):
         pass
 
