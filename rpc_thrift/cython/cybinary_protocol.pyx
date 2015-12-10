@@ -470,7 +470,7 @@ cdef class TCyBinaryProtocol(object):
 
     cpdef writeMessageBegin(self, name, TType ttype, int32_t seqid):
         cdef int32_t version = VERSION_1 | ttype
-        
+
         try:
             self.lastWriteTime = time()
 
