@@ -39,15 +39,22 @@ cdef class TCyFramedTransport(CyTransportBase):
 
     cdef read_trans(self, int sz, char *out):
         cdef int i = self.rbuf.read_trans(self.trans, sz, out)
+
         if i == -1:
+            self.close()
+            self.clean()
             raise TTransportException(TTransportException.END_OF_FILE,
                                       "End of file reading from transport")
         elif i == -2:
+            self.close()
+            self.clean()
             raise MemoryError("grow buffer fail")
 
     cdef write_rframe_buffer(self, const char *data, int sz):
         cdef int r = self.rframe_buf.write(sz, data)
         if r == -1:
+            self.close()
+            self.clean()
             raise MemoryError("Write to buffer error")
 
     cdef c_read(self, int sz, char *out):
@@ -72,8 +79,11 @@ cdef class TCyFramedTransport(CyTransportBase):
     cdef c_write(self, const char *data, int sz):
         cdef int r = self.wframe_buf.write(sz, data)
         if r == -1:
+            self.close()
+            self.clean()
             raise MemoryError("Write to buffer error")
 
+    # 不具备状态自恢复的功能
     cdef _read_frame_internal(self):
         cdef:
             char frame_len[4]
@@ -107,20 +117,25 @@ cdef class TCyFramedTransport(CyTransportBase):
             char frame_len[4]
             int32_t frame_size
             TCyMemoryBuffer buff
+        try:
+            # 读取一个新的frame_size
+            self.read_trans(4, frame_len)
+            frame_size = be32toh((<int32_t*>frame_len)[0])
 
-        # 读取一个新的frame_size
-        self.read_trans(4, frame_len)
-        frame_size = be32toh((<int32_t*>frame_len)[0])
+            if frame_size <= 0:
+                raise TTransportException("No frame.", TTransportException.UNKNOWN)
 
-        if frame_size <= 0:
-            raise TTransportException("No frame.", TTransportException.UNKNOWN)
+            buffer = TCyMemoryBuffer(buf_size=4 + frame_size)
+            buffer.c_write(frame_len, 4)
+            self.read_trans(frame_size, buffer.buf.buf + 4)
+            buffer.buf.data_size = 4 + frame_size
 
-        buffer = TCyMemoryBuffer(buf_size=4 + frame_size)
-        buffer.c_write(frame_len, 4)
-        self.read_trans(frame_size, buffer.buf.buf + 4)
-        buffer.buf.data_size = 4 + frame_size
+            return buffer
+        except:
+            self.close()
+            self.clean()
+            raise
 
-        return buffer
 
     def flush(self):
         """
@@ -182,13 +197,13 @@ cdef class TCyFramedTransport(CyTransportBase):
         self._flush_frame_buff(buf)
 
     def read(self, int sz):
-        try:
-            return self.get_string(sz)
-        except:
-            # 如果遇到异常，则关闭transaction
-            self.close()
-            self.clean()
-            raise
+        # try:
+        return self.get_string(sz)
+        # except:
+        #     # 如果遇到异常，则关闭transaction
+        #     self.close()
+        #     self.clean()
+        #     raise
 
     def write(self, bytes data):
         cdef int sz = len(data)
@@ -203,9 +218,11 @@ cdef class TCyFramedTransport(CyTransportBase):
     def open(self):
         return self.trans.open()
 
+    # 断开连接
     def close(self):
         return self.trans.close()
 
+    # 重置缓存
     def clean(self):
         self.rbuf.clean()
         self.rframe_buf.clean()

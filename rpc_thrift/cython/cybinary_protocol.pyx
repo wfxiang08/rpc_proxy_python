@@ -435,31 +435,35 @@ cdef class TCyBinaryProtocol(object):
         cdef int32_t size, version, seqid
         cdef TType ttype
         cdef double elapsed;
+        try:
+            size = read_i32(self.trans)
+            if size < 0:
+                version = size & VERSION_MASK
+                if version != VERSION_1:
+                    raise ProtocolError('invalid version %d' % version)
 
-        size = read_i32(self.trans)
-        if size < 0:
-            version = size & VERSION_MASK
-            if version != VERSION_1:
-                raise ProtocolError('invalid version %d' % version)
+                name = c_read_val(self.trans, T_STRING)
+                ttype = <TType>(size & TYPE_MASK)
+            else:
+                if self.strict_read:
+                    raise ProtocolError('No protocol version header')
 
-            name = c_read_val(self.trans, T_STRING)
-            ttype = <TType>(size & TYPE_MASK)
-        else:
-            if self.strict_read:
-                raise ProtocolError('No protocol version header')
+                name = c_read_string(self.trans, size)
+                ttype = <TType>(read_i08(self.trans))
 
-            name = c_read_string(self.trans, size)
-            ttype = <TType>(read_i08(self.trans))
+            seqid = read_i32(self.trans)
 
-        seqid = read_i32(self.trans)
-
-        elapsed = (time() - self.lastWriteTime) * 1000
-        if self.logger:
-            method = self.service + ":" + name
-            self.logger.info("\033[35m[RPC] %s\033[39m[%d] ends, Elapsed: %.3fms", method, seqid, elapsed)
+            elapsed = (time() - self.lastWriteTime) * 1000
+            if self.logger:
+                method = self.service + ":" + name
+                self.logger.info("\033[35m[RPC] %s\033[39m[%d] ends, Elapsed: %.3fms", method, seqid, elapsed)
 
 
-        return name, ttype, seqid
+            return name, ttype, seqid
+        except:
+            self.trans.close()
+            self.trans.clean()
+            raise
 
     def readMessageEnd(self):
         pass
@@ -467,27 +471,34 @@ cdef class TCyBinaryProtocol(object):
     cpdef writeMessageBegin(self, name, TType ttype, int32_t seqid):
         cdef int32_t version = VERSION_1 | ttype
 
-        self.lastWriteTime = time()
+        try:
+            self.lastWriteTime = time()
 
-        if self.strict_write:
-            write_i32(self.trans, version)
-            if self.service:
-                c_write_val(self.trans, T_STRING, self.service + ":" + name)
+            if self.strict_write:
+                write_i32(self.trans, version)
+                if self.service:
+                    c_write_val(self.trans, T_STRING, self.service + ":" + name)
+                else:
+                    c_write_val(self.trans, T_STRING, name)
             else:
-                c_write_val(self.trans, T_STRING, name)
-        else:
-            if self.service:
-                c_write_val(self.trans, T_STRING, self.service + ":" + name)
-            else:
-                c_write_val(self.trans, T_STRING, name)
+                if self.service:
+                    c_write_val(self.trans, T_STRING, self.service + ":" + name)
+                else:
+                    c_write_val(self.trans, T_STRING, name)
 
-            write_i08(self.trans, ttype)
+                write_i08(self.trans, ttype)
 
-        write_i32(self.trans, seqid)
+            write_i32(self.trans, seqid)
+        except:
+            self.trans.close()
+            self.trans.clean()
+            raise
 
     def writeMessageEnd(self):
         # 在writeMessageEnd时，不应该调用c_flush，c_flush没有自己的异常处理
         # 为了保险，暂时保留; c_flush和flush等价，并且具备异常处理功能
+
+        # trans 内部处理了异常
         self.trans.c_flush()
 
 
@@ -495,6 +506,7 @@ cdef class TCyBinaryProtocol(object):
         try:
             return read_struct(self.trans, obj)
         except Exception:
+            self.trans.close()
             self.trans.clean()
             raise
 
@@ -502,6 +514,7 @@ cdef class TCyBinaryProtocol(object):
         try:
             write_struct(self.trans, obj)
         except Exception:
+            self.trans.close()
             self.trans.clean()
             raise
 

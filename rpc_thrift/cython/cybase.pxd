@@ -19,9 +19,15 @@ cdef class TCyBuffer(object):
 
 
 cdef class CyTransportBase(object):
+    #
+    # CyFramedTransport 如何是实现呢?
+    # 大部分情况下读取Buffer, 没有数据再从Transport读取数据，如果遇到异常transport 自动断开，清除状态
+    #
     cdef c_read(self, int sz, char* out)
     cdef c_write(self, char* data, int sz)
     cdef c_flush(self)
 
+
+    # 底层调用: c_read, 因此也具有状态自恢复的功能
     cdef get_string(self, int sz)
 
