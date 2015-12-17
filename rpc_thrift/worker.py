@@ -27,6 +27,8 @@ from rpc_thrift.config import print_exception
 from rpc_thrift.heartbeat import new_rpc_exit_message
 
 info_logger = logging.getLogger('info_logger')
+exception_logger = logging.getLogger('exception_logger')
+
 ISOTIMEFORMAT='%Y-%m-%d %X'
 
 class RpcWorker(object):
@@ -67,7 +69,7 @@ class RpcWorker(object):
         """
             从 proto_input中读取数据，然后调用processor处理请求，结果暂时缓存在内存中, 最后一口气交给 queue,
             由专门的 greenlet将数据写回到socket上
-            request_meta = (name, type, seqid)
+            request_meta = (name, type, seqid, start_time)
         """
 
         # 1. 获取一个可用的trans_output
@@ -102,6 +104,12 @@ class RpcWorker(object):
             queue.put(trans_output)
 
         finally:
+            start_time = request_meta[3]
+            elapsed = time.time() - start_time
+            if elapsed > 2:
+                # 做异常记录
+                exception_logger.info("Exception Request: %s %s %s, Elaspsed: %.3f", request_meta[0], request_meta[1], request_meta[2], elapsed)
+
             # 3. 回收 transport 和 protocol
             self.out_protocols.append((trans_output, proto_output))
 
@@ -210,7 +218,7 @@ class RpcWorker(object):
                 else:
                     self.last_request_time = time.time()
                     trans_input.reset_frame()
-                    self.task_pool.spawn(self.handle_request, proto_input, queue, (name, type, seqid))
+                    self.task_pool.spawn(self.handle_request, proto_input, queue, (name, type, seqid, time.time()))
             except TTransportException as e:
                 # EOF是很正常的现象
                 if e.type != TTransportException.END_OF_FILE:
