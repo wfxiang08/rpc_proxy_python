@@ -1,6 +1,6 @@
 # 在PyCharm中有警告，如何解除？
 from libc.stdlib cimport malloc, free
-from libc.string cimport memcpy, memmove
+from libc.string cimport memcpy, memmove, memset
 
 
 # 自己实现的Buffer, 不使用: cStringIO
@@ -27,6 +27,7 @@ cdef class TCyBuffer(object):
         # buf, buf_size不变
         self.cur = 0
         self.data_size = 0
+        memset(self.buf, 0, self.buf_size)
 
     cdef void reset(self):
         '''
