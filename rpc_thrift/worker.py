@@ -27,11 +27,13 @@ from rpc_thrift.config import print_exception
 from rpc_thrift.heartbeat import new_rpc_exit_message
 
 info_logger = logging.getLogger('info_logger')
-
+ISOTIMEFORMAT='%Y-%m-%d %X'
 
 class RpcWorker(object):
     def __init__(self, processor, address, pool_size=1, service=None, fastbinary=False):
         self.processor = processor
+
+        self.pid = os.getpid() # 记录当前进程的Id
 
         if address.find(":") != -1:
             address = address.split(":")
@@ -112,9 +114,9 @@ class RpcWorker(object):
 
     def connection_to_lb(self):
         if self.unix_socket:
-            info_logger.info("Prepare open a socket to lb: %s", self.unix_socket)
+            info_logger.info("Prepare open a socket to lb: %s, pid: %s", self.unix_socket, self.pid)
         else:
-            info_logger.info("Prepare open a socket to lb: %s:%s", self.host, self.port)
+            info_logger.info("Prepare open a socket to lb: %s:%s, pid: %s", self.host, self.port, self.pid)
 
         # 1. 创建一个到lb的连接，然后开始读取Frame, 并且返回数据
         socket = TSocket(host=self.host, port=self.port, unix_socket=self.unix_socket)
@@ -124,7 +126,7 @@ class RpcWorker(object):
                 socket.open()
             socket.setTimeout(5000) # 出现异常，会自己重启
         except TTransportException:
-            info_logger.info("Sleep %ds for another retry", self.reconnect_interval)
+            info_logger.info("Sleep %ds for another retry, pid: %s", self.reconnect_interval, self.pid)
             time.sleep(self.reconnect_interval)
             print_exception(info_logger)
 
@@ -152,7 +154,8 @@ class RpcWorker(object):
 
         # 4. 关闭连接
         try:
-            print "Trans Closed, queue size: ", self.queue.qsize()
+            # 什么情况下会关闭呢? 连接断开了,
+            print time.strftime(ISOTIMEFORMAT, time.localtime()), "Trans Closed, queue size: ", self.queue.qsize(), ", pid: ", self.pid
             self.queue = None
             self.socket = None
             socket.close()
@@ -166,6 +169,7 @@ class RpcWorker(object):
         while transport.isOpen():
             # 如果5s内没有心跳，则关闭当前的transport
             if time.time() - self.last_hb_time > 5:
+                print time.strftime(ISOTIMEFORMAT, time.localtime()), " heartbeat lost, close transport, pid: ", self.pid
                 transport.close()
                 break
             else:
