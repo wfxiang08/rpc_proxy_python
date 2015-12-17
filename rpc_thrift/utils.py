@@ -76,7 +76,7 @@ def get_fast_transport(endpoint, timeout=5000):
         socket.setTimeout(timeout)
         socket.open()
 
-        _fast_transport = TCyFramedTransport(socket)
+        _fast_transport = TCyFramedTransport(socket, maxIdleTime=1200) # 20分钟没有写数据，则重新打开transport
 
     return _fast_transport
 

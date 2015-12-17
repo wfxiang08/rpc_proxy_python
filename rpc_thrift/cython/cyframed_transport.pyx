@@ -1,8 +1,7 @@
 from libc.stdlib cimport malloc, free
 from libc.string cimport memcpy
 from libc.stdint cimport int32_t
-
-
+import time
 
 from rpc_thrift.cython.cybase cimport (
     TCyBuffer,
@@ -25,7 +24,7 @@ cdef extern from "./endian_port.h":
 
 cdef class TCyFramedTransport(CyTransportBase):
 
-    def __init__(self, trans, int buf_size=DEFAULT_BUFFER):
+    def __init__(self, trans, int buf_size=DEFAULT_BUFFER, float maxIdleTime=-1):
         self.trans = trans # Python对象
 
         # 负责和transport进行读的buffer操作
@@ -36,6 +35,10 @@ cdef class TCyFramedTransport(CyTransportBase):
 
         self.wframe_buf = TCyBuffer(buf_size)
         self.wframe_buf.write(4, "1234") # 占位
+        self.lastAccessTime = time.time() # 上次访问时间
+        self.maxIdleTime = maxIdleTime
+
+
 
     cdef read_trans(self, int sz, char *out):
         cdef int i = self.rbuf.read_trans(self.trans, sz, out)
@@ -154,8 +157,18 @@ cdef class TCyFramedTransport(CyTransportBase):
         if self.wframe_buf.data_size > 4:
             # 只有存在有效的数据，才flush; 防止重复调用
             try:
+
+                if self.maxIdleTime > 0:
+                    now = time.time()
+                    # 如果长时间没有访问（例如: 10分钟，则关闭socket, 重启)
+                    if now - self.lastAccessTime > self.maxIdleTime:
+                       self.close()
+                       self.clean()
+
+                    self.lastAccessTime = now
                 if not self.isOpen():
                     self.open()
+
                 size = htobe32(self.wframe_buf.data_size - 4)
                 memcpy(self.wframe_buf.buf, &size, 4)
 

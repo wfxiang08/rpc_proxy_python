@@ -7,6 +7,8 @@ cdef class TCyFramedTransport(CyTransportBase):
     cdef:
         public object trans
         TCyBuffer rbuf, rframe_buf, wframe_buf
+        float lastAccessTime
+        float maxIdleTime
 
     cpdef read_frame(self)
     cdef write_rframe_buffer(self, const char *data, int sz)
