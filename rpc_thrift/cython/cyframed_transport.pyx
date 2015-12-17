@@ -12,9 +12,8 @@ from rpc_thrift.cython.cybase cimport (
 
 cimport rpc_thrift.cython.cymemory_transport
 from rpc_thrift.cython.cymemory_transport cimport TCyMemoryBuffer
-
 from thrift.transport.TTransport import TTransportException
-# from rpc_thrift.cython.cymemory_transport import TCyMemoryBuffer
+
 
 
 cdef extern from "./endian_port.h":
@@ -188,19 +187,12 @@ cdef class TCyFramedTransport(CyTransportBase):
             raise
 
     def read(self, int sz):
-        # try:
+        # get_string内部已经处理了异常逻辑
         return self.get_string(sz)
-        # except:
-        #     # 如果遇到异常，则关闭transaction
-        #     self.close()
-        #     self.clean()
-        #     raise
 
     def write(self, bytes data):
         cdef int sz = len(data)
         self.c_write(data, sz)
-
-
 
 
     def isOpen(self):
@@ -214,6 +206,7 @@ cdef class TCyFramedTransport(CyTransportBase):
         return self.trans.close()
 
     # 重置缓存
+    # 同时删除: rbuf, rframe_buf, wframe
     def clean(self):
         self.rbuf.clean()
         self.rframe_buf.clean()

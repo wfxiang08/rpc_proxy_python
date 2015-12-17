@@ -463,8 +463,9 @@ cdef class TCyBinaryProtocol(object):
 
             return name, ttype, seqid
         except:
-            self.trans.close()
-            self.trans.clean()
+            if self.client:
+                self.trans.close()
+                self.trans.clean()
             raise
 
     def readMessageEnd(self):
@@ -512,14 +513,18 @@ cdef class TCyBinaryProtocol(object):
         try:
             return read_struct(self.trans, obj)
         except Exception:
-            self.trans.close()
-            self.trans.clean()
+            # 只有client发现异常时，才直接干死connection
+            # server端由于是异步处理，读发现异常时，不再读取；但是还可以继续回写数据
+            if self.client:
+                self.trans.close()
+                self.trans.clean()
             raise
 
     def write_struct(self, obj):
         try:
             write_struct(self.trans, obj)
         except Exception:
+            # 不管是client, 还是server, 如果不能写数据了，则可以直接关闭连接
             self.trans.close()
             self.trans.clean()
             raise

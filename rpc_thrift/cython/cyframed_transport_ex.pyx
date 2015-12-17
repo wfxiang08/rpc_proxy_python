@@ -38,6 +38,9 @@ cdef class TCyFramedTransportEx(CyTransportBase):
         self.rbuf.clean()
         return self.trans.close()
 
+    def clean(self):
+        pass
+
     cdef c_read(self, int sz, char* out):
         raise TTransportException(TTransportException.UNKNOWN, "Method not allowed")
     cdef c_write(self, char* data, int sz):
@@ -85,14 +88,11 @@ cdef class TCyFramedTransportEx(CyTransportBase):
     # ------------------------------------------------------------------------------------------------------------------
     # 用于服务端(Worker一次将数据写回给Client)，写回操作异常那么整个读写都结束，否则
     cpdef flush_frame_buff(self, buff):
-        # cdef:
-        #     TCyMemoryBuffer buff1
         try:
 
             if not self.isOpen():
                 raise TTransportException(TTransportException.NOT_OPEN, "Transport Closed")
 
-            # buff1 = buff
             frame = buff.get_frame_value()
             self.trans.write(frame)
             self.trans.flush()

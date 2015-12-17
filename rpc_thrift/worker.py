@@ -174,7 +174,7 @@ class RpcWorker(object):
             print time.strftime(ISOTIMEFORMAT, time.localtime()), "Trans Closed, queue size: ", self.queue.qsize(), ", pid: ", self.pid
             self.queue = None
             self.socket = None
-            socket.close()
+            transport.close() # 关闭transport(而且transport也不会继续复用)
         except:
             print_exception(info_logger)
             pass
