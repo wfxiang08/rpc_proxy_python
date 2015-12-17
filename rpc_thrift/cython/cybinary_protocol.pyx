@@ -472,6 +472,8 @@ cdef class TCyBinaryProtocol(object):
         cdef int32_t version = VERSION_1 | ttype
 
         try:
+            # 开始写数据时，
+            self.trans.clean()
             self.lastWriteTime = time()
 
             if self.strict_write:

@@ -22,6 +22,10 @@ cdef extern from "./endian_port.h":
     int32_t htobe32(int32_t n)
 
 
+#
+# 用户客户端的同步读写的Transport
+# 任何读写错误都会导致transport的close和buffer的clean
+#
 cdef class TCyFramedTransport(CyTransportBase):
 
     def __init__(self, trans, int buf_size=DEFAULT_BUFFER, float maxIdleTime=-1):
@@ -113,33 +117,6 @@ cdef class TCyFramedTransport(CyTransportBase):
             finally:
                 free(dy_frame)
 
-
-    cpdef read_frame(self):
-        # 如何读取一帧数据，并且以 TCyMemoryBuffer 形式返回
-        cdef:
-            char frame_len[4]
-            int32_t frame_size
-            TCyMemoryBuffer buff
-        try:
-            # 读取一个新的frame_size
-            self.read_trans(4, frame_len)
-            frame_size = be32toh((<int32_t*>frame_len)[0])
-
-            if frame_size <= 0:
-                raise TTransportException("No frame.", TTransportException.UNKNOWN)
-
-            buffer = TCyMemoryBuffer(buf_size=4 + frame_size)
-            buffer.c_write(frame_len, 4)
-            self.read_trans(frame_size, buffer.buf.buf + 4)
-            buffer.buf.data_size = 4 + frame_size
-
-            return buffer
-        except:
-            self.close()
-            self.clean()
-            raise
-
-
     def flush(self):
         """
             flush和c_flush等价，并且多次重复调用没有副作用
@@ -206,9 +183,6 @@ cdef class TCyFramedTransport(CyTransportBase):
             self.clean()
             raise
 
-    def flush_frame_buff(self, buf):
-        self._flush_frame_buff(buf)
-
     def read(self, int sz):
         # try:
         return self.get_string(sz)
@@ -242,6 +216,7 @@ cdef class TCyFramedTransport(CyTransportBase):
 
         self.wframe_buf.clean()
         self.wframe_buf.write(4, "1234") # 占位
+
 
 
 class TCyFramedTransportFactory(object):

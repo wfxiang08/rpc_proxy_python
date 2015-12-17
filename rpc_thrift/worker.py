@@ -15,10 +15,10 @@ import gevent.event
 import gevent.local
 import gevent.lock
 from rpc_thrift.cython.cybinary_protocol import TCyBinaryProtocol
-from rpc_thrift.cython.cyframed_transport import TCyFramedTransport
 from thrift.Thrift import TApplicationException, TMessageType
 from thrift.transport.TSocket import TSocket
 from thrift.transport.TTransport import TTransportException
+from rpc_thrift.cython.cyframed_transport_ex import TCyFramedTransportEx
 
 from rpc_thrift.cython.cymemory_transport import TCyMemoryBuffer
 
@@ -53,6 +53,7 @@ class RpcWorker(object):
         self.acceptor_task = None
 
         # 5. 程序退出控制
+        self.connection_ok = True
         self.alive = True
         self.reconnect_interval = 1
 
@@ -147,14 +148,20 @@ class RpcWorker(object):
         self.reconnect_interval = 1
 
         self.socket = socket
+
+        # 每次建立连接都重新构建
         self.queue = gevent.queue.Queue()
+        self.connection_ok = True
 
         info_logger.info("Begin request loop....")
-
-
-
         # 3. 在同一个transport上进行读写数据
-        transport = TCyFramedTransport(socket)
+        transport = TCyFramedTransportEx(socket)
+
+        #
+        # 关注 transport的接口:
+        #      flush_frame_buff
+        #      read_frame
+        #
         g1 = gevent.spawn(self.loop_reader, transport, self.queue)
         g2 = gevent.spawn(self.loop_writer, transport, self.queue)
         g3 = gevent.spawn(self.loop_hb_detect, transport)
@@ -175,7 +182,7 @@ class RpcWorker(object):
 
     def loop_hb_detect(self, transport):
         self.last_hb_time = time.time()
-        while transport.isOpen():
+        while transport.isOpen(): # 关闭socket之后, transport也就关闭了
             # 如果5s内没有心跳，则关闭当前的transport
             if time.time() - self.last_hb_time > 5:
                 print time.strftime(ISOTIMEFORMAT, time.localtime()), " heartbeat lost, close transport, pid: ", self.pid
@@ -197,7 +204,7 @@ class RpcWorker(object):
         """
         # transport = TCyFramedTransport(None)
 
-        while True:
+        while self.connection_ok:
             try:
                 # 1. 读取一帧数据
                 trans_input = transport.read_frame() # TCyMemoryBuffer, 有可能一直堵在这里, 通过 loop_hb_detect.close()来终止
@@ -241,13 +248,13 @@ class RpcWorker(object):
         :return:
         """
         msg = queue.get()
-        while msg is not None:
+        # msg 为 None表示已经读取完毕所有的 input message
+        while self.connection_ok and (msg is not None):
             try:
-                # print "====> ", msg
                 transport.flush_frame_buff(msg)
-                # transport.flush()
             except:
                 print_exception(info_logger)
+                self.connection_ok = False
                 break
 
             # 简单处理
