@@ -419,14 +419,16 @@ cdef class TCyBinaryProtocol(object):
         str  service
         object logger
         double lastWriteTime
+        bool client
 
 
-    def __init__(self, trans, strict_read=True, strict_write=True, service=None, logger=None):
+    def __init__(self, trans, strict_read=True, strict_write=True, service=None, logger=None, client=True):
         self.trans = trans
         self.strict_read = strict_read
         self.strict_write = strict_write
         self.service = service
         self.logger = logger
+        self.client = client # 是否为client, 如果是: 在每次写数据之前都会 clean状态
 
     def skip(self, ttype):
         skip(self.trans, <TType>(ttype))
@@ -473,7 +475,9 @@ cdef class TCyBinaryProtocol(object):
 
         try:
             # 开始写数据时，
-            self.trans.clean()
+            # 如果为client, 则说明应该没有可读取的数据了
+            if self.client:
+                self.trans.clean() # 会把数据都清理掉
             self.lastWriteTime = time()
 
             if self.strict_write:

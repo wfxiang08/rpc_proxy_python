@@ -139,13 +139,17 @@ cdef class TCyFramedTransport(CyTransportBase):
                     now = time.time()
                     # 如果长时间没有访问（例如: 10分钟，则关闭socket, 重启)
                     if now - self.lastAccessTime > self.maxIdleTime:
-                       self.close()
-                       self.clean()
+                        print "Close Transport...."
+                        self.rbuf.clean()
+                        self.rframe_buf.clean()
+                        self.close()
+                        # self.clean()
 
                     self.lastAccessTime = now
                 if not self.isOpen():
                     self.open()
 
+                print "Size: ", self.wframe_buf.data_size
                 size = htobe32(self.wframe_buf.data_size - 4)
                 memcpy(self.wframe_buf.buf, &size, 4)
 

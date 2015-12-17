@@ -80,7 +80,7 @@ class RpcWorker(object):
         else:
             trans_output = TCyMemoryBuffer()
             trans_output.prepare_4_frame()
-            proto_output = TCyBinaryProtocol(trans_output) # 无状态的
+            proto_output = TCyBinaryProtocol(trans_output, client=False) # 无状态的
 
 
         try:
@@ -210,7 +210,7 @@ class RpcWorker(object):
                 trans_input = transport.read_frame() # TCyMemoryBuffer, 有可能一直堵在这里, 通过 loop_hb_detect.close()来终止
 
                 trans_input.reset_frame() # 跳过Frame Size
-                proto_input = TCyBinaryProtocol(trans_input)
+                proto_input = TCyBinaryProtocol(trans_input, client=False)
 
                 name, type, seqid = proto_input.readMessageBegin()
 
@@ -225,6 +225,8 @@ class RpcWorker(object):
 
                 else:
                     self.last_request_time = time.time()
+
+                    print "Read Request"
                     trans_input.reset_frame()
                     self.task_pool.spawn(self.handle_request, proto_input, queue, (name, type, seqid, time.time()))
             except TTransportException as e:
@@ -250,6 +252,7 @@ class RpcWorker(object):
         msg = queue.get()
         # msg 为 None表示已经读取完毕所有的 input message
         while self.connection_ok and (msg is not None):
+            print "Write Back Msg"
             try:
                 transport.flush_frame_buff(msg)
             except:
