@@ -71,7 +71,7 @@ class RpcWorker(object):
             由专门的 greenlet将数据写回到socket上
             request_meta = (name, type, seqid, start_time)
         """
-
+        start_time0 = time.time()
         # 1. 获取一个可用的trans_output
         if len(self.out_protocols) > 0:
             trans_output, proto_output = self.out_protocols.popleft()
@@ -105,10 +105,11 @@ class RpcWorker(object):
 
         finally:
             start_time = request_meta[3]
-            elapsed = time.time() - start_time
+            now = time.time()
+            elapsed = now - start_time
             if elapsed > 2:
                 # 做异常记录
-                exception_logger.info("Exception Request: %s %s %s, Elaspsed: %.3f", request_meta[0], request_meta[1], request_meta[2], elapsed)
+                exception_logger.info("Exception Request: %s %s %s, Elaspsed: %.3f, Execute: %.3f", request_meta[0], request_meta[1], request_meta[2], elapsed, now - start_time0)
 
             # 3. 回收 transport 和 protocol
             self.out_protocols.append((trans_output, proto_output))
