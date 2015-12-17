@@ -84,7 +84,7 @@ cdef class TCyFramedTransportEx(CyTransportBase):
 
     # ------------------------------------------------------------------------------------------------------------------
     # 用于服务端(Worker一次将数据写回给Client)，写回操作异常那么整个读写都结束，否则
-    cdef flush_frame_buff(self, buff):
+    cpdef flush_frame_buff(self, buff):
         cdef:
             TCyMemoryBuffer buff1
         try:
