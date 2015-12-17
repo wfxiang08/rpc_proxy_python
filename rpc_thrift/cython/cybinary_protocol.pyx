@@ -475,9 +475,9 @@ cdef class TCyBinaryProtocol(object):
 
         try:
             # 开始写数据时，
-            # 如果为client, 则说明应该没有可读取的数据了
+            # 如果为client, 则说明应该没有可读取的数据了, 会把数据都清理掉保证状态的可靠；但是server端，数据读写是异步的，就不能直接clean；除非整个connection出现异常
             if self.client:
-                self.trans.clean() # 会把数据都清理掉
+                self.trans.clean()
             self.lastWriteTime = time()
 
             if self.strict_write:
