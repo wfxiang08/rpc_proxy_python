@@ -1,5 +1,6 @@
 # -*- coding:utf-8 -*-
 from __future__ import  absolute_import
+from rpc_thrift.cython.cyframed_transport_ex import TCyFramedTransportEx
 
 from rpc_thrift.cython.cymemory_transport import TCyMemoryBuffer
 from rpc_thrift.cython.cyframed_transport import TCyFramedTransport
@@ -38,13 +39,13 @@ class FramedBufferTest(TestCase):
         buf2.write("abcdef")
 
         buf1 = TMemoryBuffer()
-        tran1 = TCyFramedTransport(buf1)
+        tran1 = TCyFramedTransportEx(buf1)
         tran1.flush_frame_buff(buf2)
 
         print "Framed Output: ", ["%03d" % ord(i) for i in buf1.getvalue()]
 
         buf1.reset()
-        tran1 = TCyFramedTransport(buf1)
+        tran1 = TCyFramedTransportEx(buf1)
 
         mem_trans = tran1.read_frame()
         print "ReadFrame: ", mem_trans

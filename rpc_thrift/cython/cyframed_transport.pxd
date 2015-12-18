@@ -10,8 +10,8 @@ cdef class TCyFramedTransport(CyTransportBase):
         float lastAccessTime
         float maxIdleTime
 
-    cpdef read_frame(self)
     cdef write_rframe_buffer(self, const char *data, int sz)
     cdef _read_frame_internal(self)
     cdef _flush_frame_buff(self, buff1)
     cdef read_trans(self, int sz, char *out)
+

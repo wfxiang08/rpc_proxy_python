@@ -23,9 +23,10 @@ from distutils.core import setup
 from Cython.Distutils import build_ext
 
 ext_modules = []
-files = ["cybase", "cybinary_protocol", "cyframed_transport", "cymemory_transport"]
+files = ["cybase", "cybinary_protocol", "cyframed_transport", "cymemory_transport", "cyframed_transport_ex"]
 for f in files:
     ext_modules.append(Extension("rpc_thrift.cython.%s" % f, ["rpc_thrift/cython/cyframed_transport.pxd",
+                                                              "rpc_thrift/cython/cyframed_transport_ex.pxd",
                                                               "rpc_thrift/cython/cymemory_transport.pxd",
                                                               "rpc_thrift/cython/cybase.pxd",
                                                               "rpc_thrift/cython/%s.pyx" % f]))
@@ -33,7 +34,7 @@ for f in files:
 
 setup(
     name='rpc_proxy',
-    version="2.0.5",
+    version="2.0.7",
     description='rpc_proxy is a flexible RPC based on thrift.',
     author="wangfei",
     author_email="wangfei@chunyu.me",

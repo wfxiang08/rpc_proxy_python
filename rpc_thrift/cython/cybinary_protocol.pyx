@@ -419,14 +419,16 @@ cdef class TCyBinaryProtocol(object):
         str  service
         object logger
         double lastWriteTime
+        bool client
 
 
-    def __init__(self, trans, strict_read=True, strict_write=True, service=None, logger=None):
+    def __init__(self, trans, strict_read=True, strict_write=True, service=None, logger=None, client=True):
         self.trans = trans
         self.strict_read = strict_read
         self.strict_write = strict_write
         self.service = service
         self.logger = logger
+        self.client = client # 是否为client, 如果是: 在每次写数据之前都会 clean状态
 
     def skip(self, ttype):
         skip(self.trans, <TType>(ttype))
@@ -461,8 +463,9 @@ cdef class TCyBinaryProtocol(object):
 
             return name, ttype, seqid
         except:
-            self.trans.close()
-            self.trans.clean()
+            if self.client:
+                self.trans.close()
+                self.trans.clean()
             raise
 
     def readMessageEnd(self):
@@ -472,6 +475,10 @@ cdef class TCyBinaryProtocol(object):
         cdef int32_t version = VERSION_1 | ttype
 
         try:
+            # 开始写数据时，
+            # 如果为client, 则说明应该没有可读取的数据了, 会把数据都清理掉保证状态的可靠；但是server端，数据读写是异步的，就不能直接clean；除非整个connection出现异常
+            if self.client:
+                self.trans.clean()
             self.lastWriteTime = time()
 
             if self.strict_write:
@@ -506,14 +513,18 @@ cdef class TCyBinaryProtocol(object):
         try:
             return read_struct(self.trans, obj)
         except Exception:
-            self.trans.close()
-            self.trans.clean()
+            # 只有client发现异常时，才直接干死connection
+            # server端由于是异步处理，读发现异常时，不再读取；但是还可以继续回写数据
+            if self.client:
+                self.trans.close()
+                self.trans.clean()
             raise
 
     def write_struct(self, obj):
         try:
             write_struct(self.trans, obj)
         except Exception:
+            # 不管是client, 还是server, 如果不能写数据了，则可以直接关闭连接
             self.trans.close()
             self.trans.clean()
             raise

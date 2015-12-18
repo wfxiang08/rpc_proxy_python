@@ -12,9 +12,8 @@ from rpc_thrift.cython.cybase cimport (
 
 cimport rpc_thrift.cython.cymemory_transport
 from rpc_thrift.cython.cymemory_transport cimport TCyMemoryBuffer
-
 from thrift.transport.TTransport import TTransportException
-# from rpc_thrift.cython.cymemory_transport import TCyMemoryBuffer
+
 
 
 cdef extern from "./endian_port.h":
@@ -22,6 +21,10 @@ cdef extern from "./endian_port.h":
     int32_t htobe32(int32_t n)
 
 
+#
+# 用户客户端的同步读写的Transport
+# 任何读写错误都会导致transport的close和buffer的clean
+#
 cdef class TCyFramedTransport(CyTransportBase):
 
     def __init__(self, trans, int buf_size=DEFAULT_BUFFER, float maxIdleTime=-1):
@@ -113,33 +116,6 @@ cdef class TCyFramedTransport(CyTransportBase):
             finally:
                 free(dy_frame)
 
-
-    cpdef read_frame(self):
-        # 如何读取一帧数据，并且以 TCyMemoryBuffer 形式返回
-        cdef:
-            char frame_len[4]
-            int32_t frame_size
-            TCyMemoryBuffer buff
-        try:
-            # 读取一个新的frame_size
-            self.read_trans(4, frame_len)
-            frame_size = be32toh((<int32_t*>frame_len)[0])
-
-            if frame_size <= 0:
-                raise TTransportException("No frame.", TTransportException.UNKNOWN)
-
-            buffer = TCyMemoryBuffer(buf_size=4 + frame_size)
-            buffer.c_write(frame_len, 4)
-            self.read_trans(frame_size, buffer.buf.buf + 4)
-            buffer.buf.data_size = 4 + frame_size
-
-            return buffer
-        except:
-            self.close()
-            self.clean()
-            raise
-
-
     def flush(self):
         """
             flush和c_flush等价，并且多次重复调用没有副作用
@@ -162,13 +138,17 @@ cdef class TCyFramedTransport(CyTransportBase):
                     now = time.time()
                     # 如果长时间没有访问（例如: 10分钟，则关闭socket, 重启)
                     if now - self.lastAccessTime > self.maxIdleTime:
-                       self.close()
-                       self.clean()
+                        # print "Close Transport...."
+                        self.rbuf.clean()
+                        self.rframe_buf.clean()
+                        self.close()
+                        # self.clean()
 
                     self.lastAccessTime = now
                 if not self.isOpen():
                     self.open()
 
+                # print "Size: ", self.wframe_buf.data_size
                 size = htobe32(self.wframe_buf.data_size - 4)
                 memcpy(self.wframe_buf.buf, &size, 4)
 
@@ -206,23 +186,13 @@ cdef class TCyFramedTransport(CyTransportBase):
             self.clean()
             raise
 
-    def flush_frame_buff(self, buf):
-        self._flush_frame_buff(buf)
-
     def read(self, int sz):
-        # try:
+        # get_string内部已经处理了异常逻辑
         return self.get_string(sz)
-        # except:
-        #     # 如果遇到异常，则关闭transaction
-        #     self.close()
-        #     self.clean()
-        #     raise
 
     def write(self, bytes data):
         cdef int sz = len(data)
         self.c_write(data, sz)
-
-
 
 
     def isOpen(self):
@@ -236,12 +206,14 @@ cdef class TCyFramedTransport(CyTransportBase):
         return self.trans.close()
 
     # 重置缓存
+    # 同时删除: rbuf, rframe_buf, wframe
     def clean(self):
         self.rbuf.clean()
         self.rframe_buf.clean()
 
         self.wframe_buf.clean()
         self.wframe_buf.write(4, "1234") # 占位
+
 
 
 class TCyFramedTransportFactory(object):
