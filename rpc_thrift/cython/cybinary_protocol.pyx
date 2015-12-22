@@ -420,6 +420,7 @@ cdef class TCyBinaryProtocol(object):
         object logger
         double lastWriteTime
         bool client
+        str last_method
 
 
     def __init__(self, trans, strict_read=True, strict_write=True, service=None, logger=None, client=True):
@@ -444,7 +445,8 @@ cdef class TCyBinaryProtocol(object):
         cdef double elapsed;
 
         # 读取一帧数据
-        self.trans.read_frame_2_buff()
+        if self.client:
+            self.trans.read_frame_2_buff()
 
         try:
             size = read_i32(self.trans)
@@ -480,6 +482,7 @@ cdef class TCyBinaryProtocol(object):
 
         # 如果出现method不匹配，则扔掉当前的frame
         if self.client and self.last_method != name:
+            print self.last_method, "vs. ", name
             # 重新读取数据一帧数据
             return self.readMessageBegin()
         else:

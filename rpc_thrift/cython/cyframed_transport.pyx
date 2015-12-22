@@ -99,7 +99,7 @@ cdef class TCyFramedTransport(CyTransportBase):
             raise MemoryError("Write to buffer error")
 
 
-    cdef read_frame_2_buff(self):
+    cpdef read_frame_2_buff(self):
         """
         读取一帧数据到内部buffer中
         :return:
