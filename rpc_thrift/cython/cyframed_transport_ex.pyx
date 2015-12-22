@@ -41,7 +41,7 @@ cdef class TCyFramedTransportEx(CyTransportBase):
     def clean(self):
         pass
 
-    cdef c_read(self, int sz, char* out):
+    cdef int c_read(self, int sz, char* out):
         raise TTransportException(TTransportException.UNKNOWN, "Method not allowed")
     cdef c_write(self, char* data, int sz):
         raise TTransportException(TTransportException.UNKNOWN, "Method not allowed")
@@ -52,7 +52,7 @@ cdef class TCyFramedTransportEx(CyTransportBase):
 
 
     #-------------------------------------------------------------------------------------------------------------------
-    cpdef read_trans(self, int sz, char* out):
+    cpdef int read_trans(self, int sz, char* out):
         # 从trans中读取数据
         cdef int i = self.rbuf.read_trans(self.trans, sz, out)
 
@@ -61,6 +61,7 @@ cdef class TCyFramedTransportEx(CyTransportBase):
                                       "End of file reading from transport")
         elif i == -2:
             raise MemoryError("grow buffer fail")
+        return i
 
     cpdef read_frame(self):
         # 用于服务端(Worker一次读取一个Frame, 然后再交给外部的代码去处理整个Frame

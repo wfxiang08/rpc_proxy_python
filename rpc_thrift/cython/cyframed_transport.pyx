@@ -43,7 +43,7 @@ cdef class TCyFramedTransport(CyTransportBase):
 
 
 
-    cdef read_trans(self, int sz, char *out):
+    cdef int read_trans(self, int sz, char *out):
         # 返回 0+， 表示正常
         # 返回 -2, 表示内存分配失败
         # 返回 -1, 表示网络断开等错误
@@ -61,7 +61,7 @@ cdef class TCyFramedTransport(CyTransportBase):
 
         return i
 
-    cdef _write_rframe_buffer(self, const char *data, int sz):
+    cdef int _write_rframe_buffer(self, const char *data, int sz):
         """
             将data（完整的一帧数据）中的数据添加到 rframe_buf后面， rframe_buf应该为空
         :param data:
@@ -76,7 +76,7 @@ cdef class TCyFramedTransport(CyTransportBase):
             raise MemoryError("Write to buffer error")
         return r
 
-    cdef c_read(self, int sz, char *out):
+    cdef int c_read(self, int sz, char *out):
         if sz <= 0:
             return 0
 
