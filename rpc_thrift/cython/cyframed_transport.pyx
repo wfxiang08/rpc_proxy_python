@@ -115,7 +115,7 @@ cdef class TCyFramedTransport(CyTransportBase):
             frame_size = be32toh((<int32_t*>frame_len)[0])
 
             if frame_size <= 0:
-                raise TTransportException("No frame.", TTransportException.UNKNOWN)
+                raise TTransportException(TTransportException.UNKNOWN, "Frame Size Read Error")
 
             if frame_size <= STACK_STRING_LEN:
                 # 读取frame_size 数据，然后写入: read buffer
