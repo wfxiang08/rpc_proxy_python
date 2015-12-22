@@ -15,7 +15,11 @@ cdef class TCyBuffer(object):
         void skip_bytes(self, sz)
         int write(self, int sz, const char *value)
         int grow(self, int min_size)
-        read_trans(self, trans, int sz, char *out)
+
+        # 返回 0+， 表示正常
+        # 返回 -2, 表示内存分配失败
+        # 返回 -1, 表示网络断开等错误
+        int read_trans(self, trans, int sz, char *out)
 
 
 cdef class CyTransportBase(object):

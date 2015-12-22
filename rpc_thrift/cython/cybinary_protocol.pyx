@@ -429,6 +429,11 @@ cdef class TCyBinaryProtocol(object):
         self.service = service
         self.logger = logger
         self.client = client # 是否为client, 如果是: 在每次写数据之前都会 clean状态
+        self.last_method = None
+
+        if client:
+            from rpc_thrift.cython.cyframed_transport import TCyFramedTransport
+            assert isinstance(trans, TCyFramedTransport)
 
     def skip(self, ttype):
         skip(self.trans, <TType>(ttype))
@@ -437,6 +442,10 @@ cdef class TCyBinaryProtocol(object):
         cdef int32_t size, version, seqid
         cdef TType ttype
         cdef double elapsed;
+
+        # 读取一帧数据
+        self.trans.read_frame_2_buff()
+
         try:
             size = read_i32(self.trans)
             if size < 0:
@@ -455,18 +464,26 @@ cdef class TCyBinaryProtocol(object):
 
             seqid = read_i32(self.trans)
 
-            elapsed = (time() - self.lastWriteTime) * 1000
-            if self.logger:
-                method = self.service + ":" + name
-                self.logger.info("\033[35m[RPC] %s\033[39m[%d] ends, Elapsed: %.3fms", method, seqid, elapsed)
+            try:
+                elapsed = (time() - self.lastWriteTime) * 1000
+                if self.logger:
+                    method = self.service + ":" + name
+                    self.logger.info("\033[35m[RPC] %s\033[39m[%d] ends, Elapsed: %.3fms", method, seqid, elapsed)
+            except:
+                pass
 
-
-            return name, ttype, seqid
         except:
             if self.client:
                 self.trans.close()
                 self.trans.clean()
             raise
+
+        # 如果出现method不匹配，则扔掉当前的frame
+        if self.client and self.last_method != name:
+            # 重新读取数据一帧数据
+            return self.readMessageBegin()
+        else:
+            return name, ttype, seqid
 
     def readMessageEnd(self):
         pass
@@ -478,6 +495,7 @@ cdef class TCyBinaryProtocol(object):
             # 开始写数据时，
             # 如果为client, 则说明应该没有可读取的数据了, 会把数据都清理掉保证状态的可靠；但是server端，数据读写是异步的，就不能直接clean；除非整个connection出现异常
             if self.client:
+                self.last_method = name
                 self.trans.clean()
             self.lastWriteTime = time()
 

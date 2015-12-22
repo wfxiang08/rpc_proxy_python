@@ -19,6 +19,7 @@ cdef class TCyBuffer(object):
             self.buf = NULL
 
     cdef void move_to_start(self):
+        # http://man7.org/linux/man-pages/man3/memmove.3.html
         memmove(self.buf, self.buf + self.cur, self.data_size)
         self.cur = 0
 
@@ -27,7 +28,6 @@ cdef class TCyBuffer(object):
         # buf, buf_size不变
         self.cur = 0
         self.data_size = 0
-        memset(self.buf, 0, self.buf_size)
 
     cdef void reset(self):
         '''
@@ -64,12 +64,16 @@ cdef class TCyBuffer(object):
             if self.grow(sz - remain + self.buf_size) != 0:
                 return -1
 
+        # 写数据的时候: cur基本不变(除非遇到数据整理)
         memcpy(self.buf + self.cur + self.data_size, value, sz)
         self.data_size += sz
 
         return sz
 
-    cdef read_trans(self, trans, int sz, char *out):
+    # 返回 0+， 表示正常
+    # 返回 -2, 表示内存分配失败
+    # 返回 -1, 表示网络断开等错误
+    cdef int read_trans(self, trans, int sz, char *out):
         # 如何和python中的对象交互呢?
         cdef int cap, new_data_len
 
@@ -89,6 +93,7 @@ cdef class TCyBuffer(object):
             new_data_len = len(new_data)
 
             while new_data_len + self.data_size < sz:
+                # 数据可能一次不能读取完毕；但是一定会继续等待，直到有新的数据，或者出现连接断开
                 more = trans.read(cap - new_data_len)
                 more_len = len(more)
                 if more_len <= 0:
@@ -110,6 +115,7 @@ cdef class TCyBuffer(object):
 
         return sz
 
+    # 返回0, 表示成功；返回-1表示内存分配失败
     cdef int grow(self, int min_size):
         if min_size <= self.buf_size:
             return 0
