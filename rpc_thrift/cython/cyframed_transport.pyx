@@ -9,8 +9,6 @@ from rpc_thrift.cython.cybase cimport (
     DEFAULT_BUFFER,
     STACK_STRING_LEN
 )
-
-cimport rpc_thrift.cython.cymemory_transport
 from rpc_thrift.cython.cymemory_transport cimport TCyMemoryBuffer
 from thrift.transport.TTransport import TTransportException
 
@@ -64,10 +62,13 @@ cdef class TCyFramedTransport(CyTransportBase):
     cdef int _write_rframe_buffer(self, const char *data, int sz):
         """
             将data（完整的一帧数据）中的数据添加到 rframe_buf后面， rframe_buf应该为空
-        :param data:
-        :param sz:
-        :return:
         """
+        # 写数据的时候，应该不再期待旧有的数据
+        # 旧有的数据为什么不应该有呢?
+        # 1. 正常写，读之后，应该没有数据
+        # 2. 异常读写之后，transport会自动close/clean(断开连接，清楚缓存)
+        # 3. 但是为什么正常写之后数据读取会存在残留呢?
+        #    不知道，因此在调用 _write_rframe_buffer 时强制清空: rframe_buf
         self.rframe_buf.clean()
         cdef int r = self.rframe_buf.write(sz, data)
         if r == -1:

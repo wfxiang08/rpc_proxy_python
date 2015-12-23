@@ -110,7 +110,7 @@ class RpcWorker(object):
             elapsed = now - start_time
             if elapsed > 2:
                 # 做异常记录
-                exception_logger.info("Exception Request: %s %s %s, Elaspsed: %.3f, Execute: %.3f", request_meta[0], request_meta[1], request_meta[2], elapsed, now - start_time0)
+                exception_logger.info("Exception Request: %s %s seqId: %s_%s, Elaspsed: %.3f, Execute: %.3f", request_meta[0], request_meta[1], self.pid, request_meta[2], elapsed, now - start_time0)
 
             # 3. 回收 transport 和 protocol
             self.out_protocols.append((trans_output, proto_output))

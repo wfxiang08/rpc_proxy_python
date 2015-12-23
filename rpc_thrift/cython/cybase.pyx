@@ -102,8 +102,7 @@ cdef class TCyBuffer(object):
             if cap - self.cur < new_data_len:
                 self.move_to_start()
 
-            memcpy(self.buf + self.cur + self.data_size, <char*>new_data,
-                   new_data_len)
+            memcpy(self.buf + self.cur + self.data_size, <char*>new_data, new_data_len)
             self.data_size += new_data_len
 
         memcpy(out, self.buf + self.cur, sz)
