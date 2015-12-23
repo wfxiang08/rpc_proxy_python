@@ -52,7 +52,7 @@ cdef class TCyMemoryBuffer(CyTransportBase):
 
         if sz <= 0:
             # 没有有效的数据，直接返回
-            return
+            return 0
             # out[0] = '\0'
         else:
             memcpy(out, self.buf.buf + self.buf.cur, sz)
