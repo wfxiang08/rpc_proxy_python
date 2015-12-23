@@ -1,17 +1,11 @@
-from libc.stdlib cimport malloc, free
-from libc.string cimport memcpy
 from libc.stdint cimport int32_t
-import time
 
+from rpc_thrift.cython.cymemory_transport cimport TCyMemoryBuffer
 from rpc_thrift.cython.cybase cimport (
     TCyBuffer,
     CyTransportBase,
-    DEFAULT_BUFFER,
-    STACK_STRING_LEN
+    DEFAULT_BUFFER
 )
-
-cimport rpc_thrift.cython.cymemory_transport
-from rpc_thrift.cython.cymemory_transport cimport TCyMemoryBuffer
 
 from thrift.transport.TTransport import TTransportException
 
@@ -23,7 +17,7 @@ cdef extern from "./endian_port.h":
 cdef class TCyFramedTransportEx(CyTransportBase):
 
     def __init__(self, trans, int buf_size=DEFAULT_BUFFER):
-        self.trans = trans # Python对象 socket
+        self.trans = trans  # Python对象 socket
         self.rbuf = TCyBuffer(buf_size)
 
     def isOpen(self):
@@ -77,7 +71,7 @@ cdef class TCyFramedTransportEx(CyTransportBase):
         frame_size = be32toh((<int32_t*>frame_len)[0])
 
         if frame_size <= 0:
-            raise TTransportException("No frame.", TTransportException.UNKNOWN)
+            raise TTransportException(TTransportException.UNKNOWN, "No frame.")
 
         buffer = TCyMemoryBuffer(buf_size=4 + frame_size)
         buffer.c_write(frame_len, 4)

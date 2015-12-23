@@ -446,7 +446,13 @@ cdef class TCyBinaryProtocol(object):
 
         # 读取一帧数据
         if self.client:
+            # 清空之前的读的buf
             self.trans.read_frame_2_buff()
+            # 数据格式:
+            # frame_size
+            # size, name, <ttype>, seqid
+            # size, name, ttype, seqid
+
 
         try:
             size = read_i32(self.trans)

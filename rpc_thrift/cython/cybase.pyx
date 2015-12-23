@@ -41,9 +41,6 @@ cdef class TCyBuffer(object):
             self.cur += sz
             self.data_size -= sz
 
-    # cdef get_value(self):
-    #     # 直接返回buffer中的所有的数据
-    #     return self.buf[0:(self.data_size + self.cur)]
 
     cdef int write(self, int sz, const char *value):
         cdef:
@@ -130,8 +127,10 @@ cdef class TCyBuffer(object):
         if new_buf == NULL:
             return -1
 
+        # 保持: self.cur 和 self.data_size不变
         memcpy(new_buf + self.cur, self.buf + self.cur, self.data_size)
         free(self.buf)
+
         self.buf_size = new_size
         self.buf = new_buf
         return 0
