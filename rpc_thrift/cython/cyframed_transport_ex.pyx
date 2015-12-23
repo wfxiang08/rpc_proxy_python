@@ -1,17 +1,11 @@
-from libc.stdlib cimport malloc, free
-from libc.string cimport memcpy
 from libc.stdint cimport int32_t
-import time
 
+from rpc_thrift.cython.cymemory_transport cimport TCyMemoryBuffer
 from rpc_thrift.cython.cybase cimport (
     TCyBuffer,
     CyTransportBase,
-    DEFAULT_BUFFER,
-    STACK_STRING_LEN
+    DEFAULT_BUFFER
 )
-
-cimport rpc_thrift.cython.cymemory_transport
-from rpc_thrift.cython.cymemory_transport cimport TCyMemoryBuffer
 
 from thrift.transport.TTransport import TTransportException
 
@@ -23,7 +17,7 @@ cdef extern from "./endian_port.h":
 cdef class TCyFramedTransportEx(CyTransportBase):
 
     def __init__(self, trans, int buf_size=DEFAULT_BUFFER):
-        self.trans = trans # Python对象 socket
+        self.trans = trans  # Python对象 socket
         self.rbuf = TCyBuffer(buf_size)
 
     def isOpen(self):
@@ -41,7 +35,7 @@ cdef class TCyFramedTransportEx(CyTransportBase):
     def clean(self):
         pass
 
-    cdef c_read(self, int sz, char* out):
+    cdef int c_read(self, int sz, char* out):
         raise TTransportException(TTransportException.UNKNOWN, "Method not allowed")
     cdef c_write(self, char* data, int sz):
         raise TTransportException(TTransportException.UNKNOWN, "Method not allowed")
@@ -52,7 +46,7 @@ cdef class TCyFramedTransportEx(CyTransportBase):
 
 
     #-------------------------------------------------------------------------------------------------------------------
-    cpdef read_trans(self, int sz, char* out):
+    cpdef int read_trans(self, int sz, char* out):
         # 从trans中读取数据
         cdef int i = self.rbuf.read_trans(self.trans, sz, out)
 
@@ -61,6 +55,7 @@ cdef class TCyFramedTransportEx(CyTransportBase):
                                       "End of file reading from transport")
         elif i == -2:
             raise MemoryError("grow buffer fail")
+        return i
 
     cpdef read_frame(self):
         # 用于服务端(Worker一次读取一个Frame, 然后再交给外部的代码去处理整个Frame
@@ -76,7 +71,7 @@ cdef class TCyFramedTransportEx(CyTransportBase):
         frame_size = be32toh((<int32_t*>frame_len)[0])
 
         if frame_size <= 0:
-            raise TTransportException("No frame.", TTransportException.UNKNOWN)
+            raise TTransportException(TTransportException.UNKNOWN, "No frame.")
 
         buffer = TCyMemoryBuffer(buf_size=4 + frame_size)
         buffer.c_write(frame_len, 4)

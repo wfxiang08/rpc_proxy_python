@@ -38,18 +38,22 @@ cdef class TCyMemoryBuffer(CyTransportBase):
 
 
     def get_frame_value(self):
+        # 设置frame size
         size = htobe32(self.buf.data_size - 4)
         memcpy(self.buf.buf, &size, 4)
+        # 返回整个frame的value
         return self.buf.buf[:self.buf.data_size]
 
 
-    cdef c_read(self, int sz, char* out):
+    cdef int c_read(self, int sz, char* out):
         # 限制读取的参数
         if self.buf.data_size < sz:
             sz = self.buf.data_size
 
         if sz <= 0:
-            out[0] = '\0'
+            # 没有有效的数据，直接返回
+            return 0
+            # out[0] = '\0'
         else:
             memcpy(out, self.buf.buf + self.buf.cur, sz)
             self.buf.cur += sz
