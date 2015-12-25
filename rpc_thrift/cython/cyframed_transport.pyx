@@ -41,7 +41,7 @@ cdef class TCyFramedTransport(CyTransportBase):
 
 
 
-    cpdef read_trans(self, int sz, char *out):
+    cdef read_trans(self, int sz, char *out):
         # 返回 0+， 表示正常
         # 返回 -2, 表示内存分配失败
         # 返回 -1, 表示网络断开等错误

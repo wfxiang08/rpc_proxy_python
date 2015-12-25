@@ -19,7 +19,7 @@ cdef class TCyFramedTransport(CyTransportBase):
     cdef int _write_rframe_buffer(self, const char *data, int sz)
     cpdef read_frame_2_buff(self)
     cdef _flush_frame_buff(self, buff1)
-    cpdef read_trans(self, int sz, char *out)
+    cdef read_trans(self, int sz, char *out)
 
 
 
