@@ -226,7 +226,7 @@ cdef inline write_struct(CyTransportBase buf, obj):
             exc_type, exc_value, exc_traceback = sys.exc_info()
             exc = traceback.format_exception(exc_type, exc_value, exc_traceback)
             message = '%s' % exc
-    
+
             raise TDecodeException(obj.__class__.__name__, fid, f_name, v, message)
 
     write_i08(buf, T_STOP) # writeFieldStop
@@ -351,12 +351,17 @@ cdef c_write_val(CyTransportBase buf, TType ttype, val, spec=None):
         write_double(buf, val)
 
     elif ttype == T_STRING:
+
         #  确保为utf8格式的bytes
-        if not isinstance(val, bytes):
+        if not isinstance(val, str):
             try:
                 val = val.encode("utf-8")
             except Exception:
                 pass
+        elif type(val) != str:
+            # isinstance(val, str) and type(val) != str
+            # str的扩展类，需要转换成为str, 否则: <char*>转换
+            val = str(val)
         write_string(buf, val)
 
     elif ttype == T_SET or ttype == T_LIST:
