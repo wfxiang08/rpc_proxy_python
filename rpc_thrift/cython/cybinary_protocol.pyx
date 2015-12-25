@@ -1,6 +1,8 @@
 from libc.stdlib cimport free, malloc
 from libc.stdint cimport int16_t, int32_t, int64_t
+import traceback
 from cpython cimport bool
+import sys
 
 from rpc_thrift.cython.cybase cimport CyTransportBase, STACK_STRING_LEN
 
@@ -219,9 +221,13 @@ cdef inline write_struct(CyTransportBase buf, obj):
         write_i16(buf, fid)     # writeI16
         try:
             c_write_val(buf, f_type, v, container_spec)
-        except (TypeError, AttributeError, AssertionError, OverflowError):
-            raise TDecodeException(obj.__class__.__name__, fid, f_name, v,
-                                   f_type, container_spec)
+        except (TypeError, AttributeError, AssertionError, OverflowError) as e :
+
+            exc_type, exc_value, exc_traceback = sys.exc_info()
+            exc = traceback.format_exception(exc_type, exc_value, exc_traceback)
+            message = '%s' % exc
+    
+            raise TDecodeException(obj.__class__.__name__, fid, f_name, v, message)
 
     write_i08(buf, T_STOP) # writeFieldStop
 
