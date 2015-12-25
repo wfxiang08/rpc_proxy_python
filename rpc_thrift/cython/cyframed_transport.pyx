@@ -41,7 +41,7 @@ cdef class TCyFramedTransport(CyTransportBase):
 
 
 
-    cdef int read_trans(self, int sz, char *out):
+    cpdef read_trans(self, int sz, char *out):
         # 返回 0+， 表示正常
         # 返回 -2, 表示内存分配失败
         # 返回 -1, 表示网络断开等错误
@@ -77,7 +77,7 @@ cdef class TCyFramedTransport(CyTransportBase):
             raise MemoryError("Write to buffer error")
         return r
 
-    cdef int c_read(self, int sz, char *out):
+    cdef c_read(self, int sz, char *out):
         if sz <= 0:
             return 0
 
@@ -114,11 +114,11 @@ cdef class TCyFramedTransport(CyTransportBase):
             int32_t frame_size
         try:
             # 读取一个新的frame_size
-            self.read_trans(4, frame_len)
+            trans_num = self.read_trans(4, frame_len)
             frame_size = be32toh((<int32_t*>frame_len)[0])
 
             if frame_size <= 0:
-                raise TTransportException(TTransportException.UNKNOWN, "Frame Size Read Error")
+                raise TTransportException(TTransportException.UNKNOWN, "Frame Size Read Error: %s, trans_num: %s" % (frame_size, trans_num))
 
             if frame_size <= STACK_STRING_LEN:
                 # 读取frame_size 数据，然后写入: read buffer

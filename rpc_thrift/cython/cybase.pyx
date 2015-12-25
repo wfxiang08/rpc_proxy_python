@@ -41,7 +41,10 @@ cdef class TCyBuffer(object):
             self.cur += sz
             self.data_size -= sz
 
-
+    #
+    # http://docs.cython.org/src/userguide/language_basics.html#python-objects-as-parameters-and-return-values
+    # cdef，返回c类型的数据，不能正常返回Exception, 如果遇到Exception，直接ignored
+    #
     cdef int write(self, int sz, const char *value):
         cdef:
             int cap = self.buf_size - self.data_size # 空闲的内存
@@ -70,14 +73,16 @@ cdef class TCyBuffer(object):
     # 返回 0+， 表示正常
     # 返回 -2, 表示内存分配失败
     # 返回 -1, 表示网络断开等错误
-    cdef int read_trans(self, trans, int sz, char *out):
+    # 不要定义返回值类型，默认为object; 否则不能将python的exception传递出来
+    #
+    cdef read_trans(self, trans, int sz, char *out):
         # 如何和python中的对象交互呢?
         cdef int cap, new_data_len
 
         if sz <= 0:
             return 0
 
-        # buffer中的数据不够
+        # buffer中的数据不够, 需要补充
         if self.data_size < sz:
             # buf_size也要调整
             if self.buf_size < sz:
@@ -105,6 +110,7 @@ cdef class TCyBuffer(object):
             memcpy(self.buf + self.cur + self.data_size, <char*>new_data, new_data_len)
             self.data_size += new_data_len
 
+        # 正常数据的读取
         memcpy(out, self.buf + self.cur, sz)
         self.cur += sz
         self.data_size -= sz
@@ -141,7 +147,7 @@ cdef class CyTransportBase(object):
     # CyFramedTransport 如何是实现呢?
     # 大部分情况下读取Buffer, 没有数据再从Transport读取数据
     #
-    cdef int c_read(self, int sz, char* out):
+    cdef c_read(self, int sz, char* out):
         pass
 
     cdef c_write(self, char* data, int sz):

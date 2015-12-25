@@ -45,7 +45,7 @@ cdef class TCyMemoryBuffer(CyTransportBase):
         return self.buf.buf[:self.buf.data_size]
 
 
-    cdef int c_read(self, int sz, char* out):
+    cdef c_read(self, int sz, char* out):
         # 限制读取的参数
         if self.buf.data_size < sz:
             sz = self.buf.data_size
