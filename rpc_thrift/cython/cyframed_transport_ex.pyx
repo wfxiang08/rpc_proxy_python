@@ -35,7 +35,7 @@ cdef class TCyFramedTransportEx(CyTransportBase):
     def clean(self):
         pass
 
-    cdef int c_read(self, int sz, char* out):
+    cdef c_read(self, int sz, char* out):
         raise TTransportException(TTransportException.UNKNOWN, "Method not allowed")
     cdef c_write(self, char* data, int sz):
         raise TTransportException(TTransportException.UNKNOWN, "Method not allowed")
@@ -46,7 +46,7 @@ cdef class TCyFramedTransportEx(CyTransportBase):
 
 
     #-------------------------------------------------------------------------------------------------------------------
-    cpdef int read_trans(self, int sz, char* out):
+    cdef read_trans(self, int sz, char* out):
         # 从trans中读取数据
         cdef int i = self.rbuf.read_trans(self.trans, sz, out)
 
