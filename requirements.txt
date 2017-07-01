@@ -1,5 +1,5 @@
 gevent>=1.0
-thrift==0.9.2
+rpc_thrift==0.9.9
 colorama>=0.3.3
 pytest==2.7.0
 # Cython==0.23.2

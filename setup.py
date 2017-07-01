@@ -12,7 +12,7 @@ from setuptools.extension import Extension
 
 requirements = [
     'gevent>=1.0',
-    'thrift==0.9.9',
+    'rpc_thrift==0.9.9',
     'colorama>=0.3.3',
     "Cython==0.23.2"
 ]
@@ -37,8 +37,8 @@ setup(
     version="2.0.9",
     description='rpc_proxy is a flexible RPC based on thrift.',
     author="wangfei",
-    author_email="wangfei@chunyu.me",
-    url='https://git.chunyu.me/infra/rpc_proxy/tree/master/lib',
+    author_email="wfxiang08@gmail.com",
+    url='https://github.com/wfxiang08/rpc_proxy_python',
     packages=['rpc_thrift', 'rpc_thrift.services', 'rpc_thrift.log_utils', 'rpc_thrift.cython'],
     zip_safe=False,
     license='MIT',
